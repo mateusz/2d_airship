@@ -2,102 +2,133 @@ package main
 
 import (
 	"fmt"
+	"math/rand"
+	"os"
+	"path/filepath"
+	"reflect"
 	"time"
 
-	"gitlab.com/gomidi/midi"
-	"gitlab.com/gomidi/midi/reader"
-	"gitlab.com/gomidi/midi/writer"
-	"gitlab.com/gomidi/rtmididrv"
+	"github.com/faiface/pixel"
+	"github.com/faiface/pixel/pixelgl"
+	engine "github.com/mateusz/carryall/engine/entities"
+	"github.com/mateusz/carryall/piksele"
+	"golang.org/x/image/colornames"
 )
 
-// This example reads from the first input port
+var (
+	workDir       string
+	monW          float64
+	monH          float64
+	pixSize       float64
+	mobSprites    piksele.Spriteset
+	cursorSprites piksele.Spriteset
+	p1            player
+	gameWorld     piksele.World
+	gameEntities  engine.Entities
+)
+
 func main() {
-	drv, err := rtmididrv.New()
-	must(err)
+	rand.Seed(time.Now().UnixNano())
 
-	// make sure to close the driver at the end
-	defer drv.Close()
-
-	ins, err := drv.Ins()
-	must(err)
-	outs, err := drv.Outs()
-	must(err)
-
-	// takes the first input
-	in := ins[0]
-	out := outs[0]
-
-	fmt.Printf("opening MIDI read Port %v\n", in)
-	fmt.Printf("opening MIDI write Port %v\n", out)
-	must(in.Open())
-	must(out.Open())
-
-	defer in.Close()
-	defer out.Close()
-
-	// to disable logging, pass mid.NoLogger() as option
-	rd := reader.New(
-		reader.NoLogger(),
-		// print every message
-		reader.Each(func(pos *reader.Position, msg midi.Message) {
-			// inspect
-			fmt.Println(msg)
-		}),
-	)
-
-	// listen for MIDI
-	err = rd.ListenTo(in)
-	must(err)
-
-	wr := writer.New(out)
-	wr.SetChannel(1)
-	// LED on
-	//writer.NoteOn(wr, 0x0C, 0x7F)
-	// LED off
-	//writer.NoteOn(wr, 0x0C, 0x00)
-
-	/*
-		for ch := uint8(0); ch < 16; ch++ {
-			wr.SetChannel(ch)
-			for n := uint8(0); n < 128; n++ {
-				fmt.Printf("Ch:%d, n:%d\n", ch, n)
-				writer.NoteOn(wr, n, 0x7F)
-			}
-			time.Sleep(2 * time.Second)
-		}
-	*/
-	// This is the LED show - cycle through all colors
-	wr.SetChannel(0)
-	writer.NoteOn(wr, 36, 0x7F)
-
-	for v := uint8(0); v < 127; v++ {
-		fmt.Printf("v: %d\n", v)
-		writer.NoteOn(wr, 36, v)
-		time.Sleep(100 * time.Millisecond)
+	var err error
+	workDir, err = filepath.Abs(filepath.Dir(os.Args[0]))
+	if err != nil {
+		fmt.Printf("Error checking working dir: %s\n", err)
+		os.Exit(2)
 	}
 
-	time.Sleep(10 * time.Second)
+	gameWorld = piksele.World{}
+	gameWorld.Load(fmt.Sprintf("%s/../assets/level1.tmx", workDir))
 
-	// This switches off everything apart from blinking "loop" hmmm
-	for ch := uint8(0); ch < 16; ch++ {
-		wr.SetChannel(ch)
-		for n := uint8(0); n < 128; n++ {
-			writer.NoteOn(wr, n, 0x7F)
-			writer.NoteOn(wr, n, 0x0)
-		}
-		time.Sleep(10 * time.Millisecond)
+	mobSprites, err = piksele.NewSpritesetFromTsx(fmt.Sprintf("%s/../assets", workDir), "sprites.tsx")
+	if err != nil {
+		fmt.Printf("Error loading mobs: %s\n", err)
+		os.Exit(2)
 	}
 
-	time.Sleep(10 * time.Second)
+	gameEntities = engine.NewEntities()
+	lander := Sprite{
+		position: pixel.Vec{X: 100.0, Y: 100.0},
+		Sprite: piksele.Sprite{
+			Spriteset: &mobSprites,
+			SpriteID:  0,
+		},
+	}
+	gameEntities.Add(lander)
 
-	err = in.StopListening()
-	must(err)
-	fmt.Printf("closing MIDI Port %v\n", in)
-
+	pixelgl.Run(run)
 }
 
-func must(err error) {
+func run() {
+	monitor := pixelgl.PrimaryMonitor()
+
+	monW, monH = monitor.Size()
+	pixSize = 4.0
+
+	cfg := pixelgl.WindowConfig{
+		Title:   "Carryall",
+		Bounds:  pixel.R(0, 0, monW, monH),
+		VSync:   true,
+		Monitor: monitor,
+	}
+
+	win, err := pixelgl.NewWindow(cfg)
 	if err != nil {
-		panic(err.Error())
+		panic(err)
+	}
+
+	// Zoom in to get nice pixels
+	win.SetSmooth(false)
+	win.SetMatrix(pixel.IM.Scaled(pixel.ZV, pixSize))
+	win.SetMousePosition(pixel.Vec{X: monW / 2.0, Y: monH / 2.0})
+
+	mapCanvas := pixelgl.NewCanvas(pixel.R(0, 0, float64(gameWorld.PixelWidth()), float64(gameWorld.PixelHeight())))
+	gameWorld.Draw(mapCanvas)
+
+	p1view := pixelgl.NewCanvas(pixel.R(0, 0, monW/pixSize, monH/pixSize))
+	last := time.Now()
+	for !win.Closed() {
+		if win.Pressed(pixelgl.KeyEscape) {
+			break
+		}
+
+		dt := time.Since(last).Seconds()
+		last = time.Now()
+
+		// Move player's view
+		cam1 := pixel.IM.Moved(pixel.Vec{
+			X: -p1.position.X + p1view.Bounds().W()/2,
+			Y: -p1.position.Y + p1view.Bounds().H()/2,
+		})
+		p1view.SetMatrix(cam1)
+
+		// Update world state
+		p1.Input(win, cam1)
+		p1.Update(dt)
+
+		gameEntities.Filter(reflect.TypeOf(engine.Inputtable))
+		gameEntities.Input(win, cam1)
+
+		// Clean up for new frame
+		win.Clear(colornames.Black)
+		p1view.Clear(colornames.Green)
+
+		// Draw transformed map
+		mapCanvas.Draw(p1view, pixel.IM.Moved(pixel.Vec{
+			X: mapCanvas.Bounds().W() / 2.0,
+			Y: mapCanvas.Bounds().H() / 2.0,
+		}))
+
+		// Draw transformed mobs
+		gameEntities.ByZ().Draw(p1view)
+
+		// Blit player view
+		p1view.Draw(win, pixel.IM.Moved(pixel.Vec{
+			X: p1view.Bounds().W() / 2,
+			Y: p1view.Bounds().H() / 2,
+		}))
+
+		// Present frame!
+		win.Update()
 	}
 }

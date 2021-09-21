@@ -30,6 +30,10 @@ func (s Sprite) Draw(onto pixel.Target) {
 		onto,
 		rescueBottomPixels.Rotated(pixel.Vec{X: 0.0, Y: 0.0}, s.rotation).Moved(s.position),
 	)
+	s.Spriteset.Sprites[s.SpriteID+1].Draw(
+		onto,
+		pixel.IM.Scaled(pixel.Vec{X: 0.0, Y: 8.0}, s.leftBalVal).Moved(pixel.Vec{X: 0.0, Y: -13.0}).Rotated(pixel.Vec{X: 0.0, Y: 0.0}, s.rotation).Moved(s.position),
+	)
 }
 
 func (s Sprite) GetZ() float64 {
@@ -47,7 +51,8 @@ func (s Sprite) GetY() float64 {
 func (s *Sprite) Step(dt float64) {
 	factor := 0.02
 	s.rotation += -factor * 3.14 * float64(s.leftPanTicks)
-	s.velocity = s.velocity.Add(pixel.Vec{X: 0, Y: s.leftBalVal})
+	dv := pixel.Vec{X: 0, Y: s.leftBalVal}.Rotated(s.rotation)
+	s.velocity = s.velocity.Add(dv)
 	s.velocity = s.velocity.Add(gravity.Scaled(0.5))
 	s.position = s.position.Add(s.velocity.Scaled(factor))
 }

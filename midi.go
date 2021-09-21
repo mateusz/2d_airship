@@ -6,12 +6,14 @@ import (
 
 	"gitlab.com/gomidi/midi"
 	"gitlab.com/gomidi/midi/reader"
-	"gitlab.com/gomidi/rtmididrv"
+
+	// driver "gitlab.com/gomidi/rtmididrv"
+	driver "gitlab.com/gomidi/midicatdrv"
 )
 
 type midiController struct {
 	queue  chan midi.Message
-	driver *rtmididrv.Driver
+	driver *driver.Driver
 	in     midi.In
 }
 
@@ -21,7 +23,7 @@ func newMidiController() midiController {
 	}
 
 	var err error
-	mc.driver, err = rtmididrv.New()
+	mc.driver, err = driver.New()
 	if err != nil {
 		fmt.Printf("Error loading midi driver: %s\n", err)
 		os.Exit(2)

@@ -42,7 +42,7 @@ func main() {
 	}
 
 	gameWorld = piksele.World{}
-	gameWorld.Load(fmt.Sprintf("%s/assets/level1.tmx", workDir))
+	gameWorld.Load(fmt.Sprintf("%s/assets/level2.tmx", workDir))
 
 	mobSprites, err = piksele.NewSpritesetFromTsx(fmt.Sprintf("%s/assets", workDir), "sprites.tsx")
 	if err != nil {
@@ -52,8 +52,9 @@ func main() {
 
 	gameEntities = engine.NewEntities()
 	lander := Sprite{
-		position: pixel.Vec{X: 128.0, Y: 128.0},
-		velocity: pixel.Vec{X: 0.0, Y: 0.5},
+		position:   pixel.Vec{X: 256.0, Y: 256.0},
+		velocity:   pixel.Vec{X: 0.0, Y: 0.5},
+		leftBalVal: 0.5,
 		Sprite: piksele.Sprite{
 			Spriteset: &mobSprites,
 			SpriteID:  SPR_LANDER,
@@ -61,7 +62,7 @@ func main() {
 	}
 	gameEntities = gameEntities.Add(&lander)
 
-	p1.position = pixel.Vec{X: 128.0, Y: 128.0}
+	p1.position = pixel.Vec{X: 256.0, Y: 256.0}
 
 	mc = newMidiController()
 	defer mc.close()

@@ -10,9 +10,9 @@ type Drawable interface {
 
 func (e Entities) Draw(onto pixel.Target) {
 	for _, ent := range e {
-		inp, ok := ent.(Drawable)
+		d, ok := ent.(Drawable)
 		if ok {
-			inp.Draw(onto)
+			d.Draw(onto)
 		}
 	}
 }

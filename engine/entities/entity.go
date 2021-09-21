@@ -1,7 +1,5 @@
 package engine
 
-import "reflect"
-
 type Entity interface {
 }
 
@@ -11,8 +9,8 @@ func NewEntities() Entities {
 	return make([]Entity, 0)
 }
 
-func (e Entities) Add(ent Entity) {
-	e = append(e, ent)
+func (e Entities) Add(ent Entity) Entities {
+	return append(e, ent)
 }
 
 func (e Entities) Remove(ent Entity) {
@@ -27,16 +25,4 @@ func (e Entities) Remove(ent Entity) {
 
 func (e Entities) Len() int {
 	return len(e)
-}
-
-func (e Entities) Filter(i interface{}) Entities {
-	eWork := NewEntities()
-	f := reflect.TypeOf(i)
-	for _, x := range e {
-		if reflect.TypeOf(x).Implements(f) {
-			eWork = append(eWork, x)
-		}
-	}
-
-	return eWork
 }

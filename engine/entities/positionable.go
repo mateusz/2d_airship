@@ -1,6 +1,8 @@
 package engine
 
-import "sort"
+import (
+	"sort"
+)
 
 type Positionable interface {
 	GetZ() float64
@@ -10,7 +12,7 @@ type Positionable interface {
 
 func (e Entities) ByZ() Entities {
 	eWork := NewEntities()
-	copy(eWork, e)
+	eWork = append(eWork, e...)
 	sort.SliceStable(eWork, func(i, j int) bool {
 		pi, oki := eWork[i].(Positionable)
 		pj, okj := eWork[j].(Positionable)
@@ -31,7 +33,7 @@ func (e Entities) ByZ() Entities {
 
 func (e Entities) ByReverseZ() Entities {
 	eWork := NewEntities()
-	copy(eWork, e)
+	eWork = append(eWork, e...)
 	sort.SliceStable(eWork, func(i, j int) bool {
 		pi, oki := eWork[i].(Positionable)
 		pj, okj := eWork[j].(Positionable)

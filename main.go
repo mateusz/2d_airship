@@ -5,7 +5,6 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
-	"reflect"
 	"time"
 
 	"github.com/faiface/pixel"
@@ -13,6 +12,10 @@ import (
 	engine "github.com/mateusz/carryall/engine/entities"
 	"github.com/mateusz/carryall/piksele"
 	"golang.org/x/image/colornames"
+)
+
+const (
+	SPR_LANDER = 0
 )
 
 var (
@@ -25,6 +28,7 @@ var (
 	p1            player
 	gameWorld     piksele.World
 	gameEntities  engine.Entities
+	mc            midiController
 )
 
 func main() {
@@ -38,9 +42,9 @@ func main() {
 	}
 
 	gameWorld = piksele.World{}
-	gameWorld.Load(fmt.Sprintf("%s/../assets/level1.tmx", workDir))
+	gameWorld.Load(fmt.Sprintf("%s/assets/level1.tmx", workDir))
 
-	mobSprites, err = piksele.NewSpritesetFromTsx(fmt.Sprintf("%s/../assets", workDir), "sprites.tsx")
+	mobSprites, err = piksele.NewSpritesetFromTsx(fmt.Sprintf("%s/assets", workDir), "sprites.tsx")
 	if err != nil {
 		fmt.Printf("Error loading mobs: %s\n", err)
 		os.Exit(2)
@@ -48,13 +52,19 @@ func main() {
 
 	gameEntities = engine.NewEntities()
 	lander := Sprite{
-		position: pixel.Vec{X: 100.0, Y: 100.0},
+		position: pixel.Vec{X: 128.0, Y: 128.0},
+		velocity: pixel.Vec{X: 0.0, Y: 0.5},
 		Sprite: piksele.Sprite{
 			Spriteset: &mobSprites,
-			SpriteID:  0,
+			SpriteID:  SPR_LANDER,
 		},
 	}
-	gameEntities.Add(lander)
+	gameEntities = gameEntities.Add(&lander)
+
+	p1.position = pixel.Vec{X: 128.0, Y: 128.0}
+
+	mc = newMidiController()
+	defer mc.close()
 
 	pixelgl.Run(run)
 }
@@ -106,8 +116,9 @@ func run() {
 		p1.Input(win, cam1)
 		p1.Update(dt)
 
-		gameEntities.Filter(reflect.TypeOf(engine.Inputtable))
 		gameEntities.Input(win, cam1)
+		gameEntities.MidiInput(mc.queue)
+		gameEntities.Step(dt)
 
 		// Clean up for new frame
 		win.Clear(colornames.Black)

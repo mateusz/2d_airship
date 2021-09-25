@@ -8,6 +8,7 @@ import (
 
 const (
 	MIDI_CHAN_LEFT   = 1
+	MIDI_CHAN_RIGHT  = 2
 	MIDI_CTRL_PAN    = 10
 	MIDI_VAL_PAN_CCW = 127
 	MIDI_VAL_PAN_CW  = 1

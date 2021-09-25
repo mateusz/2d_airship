@@ -15,7 +15,10 @@ import (
 )
 
 const (
-	SPR_LANDER = 0
+	SPR_32_CARRYALL          = 0
+	SPR_32_STABILITY_AIR_JET = 1
+	SPR_32_AIR_JET           = 3
+	SPR_16_JET               = 0
 )
 
 var (
@@ -24,14 +27,17 @@ var (
 	monH          float64
 	pixSize       float64
 	mobSprites    piksele.Spriteset
+	mobSprites32  piksele.Spriteset
 	cursorSprites piksele.Spriteset
 	p1            player
 	gameWorld     piksele.World
 	gameEntities  engine.Entities
 	mc            midiController
+	startTime     time.Time
 )
 
 func main() {
+	startTime = time.Now()
 	rand.Seed(time.Now().UnixNano())
 
 	var err error
@@ -46,18 +52,38 @@ func main() {
 
 	mobSprites, err = piksele.NewSpritesetFromTsx(fmt.Sprintf("%s/assets", workDir), "sprites.tsx")
 	if err != nil {
-		fmt.Printf("Error loading mobs: %s\n", err)
+		fmt.Printf("Error loading sprites.tsx: %s\n", err)
+		os.Exit(2)
+	}
+
+	mobSprites32, err = piksele.NewSpritesetFromTsx(fmt.Sprintf("%s/assets", workDir), "sprites32.tsx")
+	if err != nil {
+		fmt.Printf("Error loading sprites32.tsx: %s\n", err)
 		os.Exit(2)
 	}
 
 	gameEntities = engine.NewEntities()
-	lander := Sprite{
-		position:   pixel.Vec{X: 256.0, Y: 256.0},
-		velocity:   pixel.Vec{X: 0.0, Y: 0.5},
-		leftBalVal: 0.5,
-		Sprite: piksele.Sprite{
+	lander := Carryall{
+		position:    pixel.Vec{X: 256.0, Y: 168.0},
+		velocity:    pixel.Vec{X: 0.0, Y: 0.5},
+		leftBalVal:  0.0,
+		rightBalVal: 0.5,
+		jetRotation: -3.14 / 2.0,
+		body: &piksele.Sprite{
+			Spriteset: &mobSprites32,
+			SpriteID:  SPR_32_CARRYALL,
+		},
+		jet: &piksele.Sprite{
 			Spriteset: &mobSprites,
-			SpriteID:  SPR_LANDER,
+			SpriteID:  SPR_16_JET,
+		},
+		stabilityAirJet: &piksele.Sprite{
+			Spriteset: &mobSprites32,
+			SpriteID:  SPR_32_STABILITY_AIR_JET,
+		},
+		airJet: &piksele.Sprite{
+			Spriteset: &mobSprites32,
+			SpriteID:  SPR_32_AIR_JET,
 		},
 	}
 	gameEntities = gameEntities.Add(&lander)
@@ -74,7 +100,7 @@ func run() {
 	monitor := pixelgl.PrimaryMonitor()
 
 	monW, monH = monitor.Size()
-	pixSize = 4.0
+	pixSize = 3.0
 
 	cfg := pixelgl.WindowConfig{
 		Title:   "Carryall",

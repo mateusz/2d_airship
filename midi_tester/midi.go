@@ -70,13 +70,13 @@ func main() {
 	wr.SetChannel(0)
 	writer.NoteOn(wr, 36, 0x7F)
 
-	for v := uint8(0); v < 127; v++ {
-		fmt.Printf("v: %d\n", v)
-		writer.NoteOn(wr, 36, v)
-		time.Sleep(100 * time.Millisecond)
-	}
-
-	time.Sleep(10 * time.Second)
+	/*
+		for v := uint8(0); v < 127; v++ {
+			fmt.Printf("v: %d\n", v)
+			writer.NoteOn(wr, 36, v)
+			time.Sleep(100 * time.Millisecond)
+		}
+	*/
 
 	// This switches off everything apart from blinking "loop" hmmm
 	for ch := uint8(0); ch < 16; ch++ {

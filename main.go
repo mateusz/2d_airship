@@ -14,18 +14,11 @@ import (
 	"golang.org/x/image/colornames"
 )
 
-const (
-	SPR_32_CARRYALL          = 0
-	SPR_32_STABILITY_AIR_JET = 1
-	SPR_32_AIR_JET           = 3
-	SPR_16_JET               = 0
-)
-
 var (
 	workDir       string
 	monW          float64
 	monH          float64
-	pixSize       float64
+	zoom          float64
 	mobSprites    piksele.Spriteset
 	mobSprites32  piksele.Spriteset
 	cursorSprites piksele.Spriteset
@@ -63,32 +56,14 @@ func main() {
 	}
 
 	gameEntities = engine.NewEntities()
-	lander := Carryall{
-		position:    pixel.Vec{X: 256.0, Y: 168.0},
-		velocity:    pixel.Vec{X: 0.0, Y: 0.5},
-		leftBalVal:  0.0,
-		rightBalVal: 0.5,
-		jetRotation: -3.14 / 2.0,
-		body: &piksele.Sprite{
-			Spriteset: &mobSprites32,
-			SpriteID:  SPR_32_CARRYALL,
-		},
-		jet: &piksele.Sprite{
-			Spriteset: &mobSprites,
-			SpriteID:  SPR_16_JET,
-		},
-		stabilityAirJet: &piksele.Sprite{
-			Spriteset: &mobSprites32,
-			SpriteID:  SPR_32_STABILITY_AIR_JET,
-		},
-		airJet: &piksele.Sprite{
-			Spriteset: &mobSprites32,
-			SpriteID:  SPR_32_AIR_JET,
-		},
-	}
-	gameEntities = gameEntities.Add(&lander)
+	carryall := NewCarryall(&mobSprites, &mobSprites32)
+	carryall.position = pixel.Vec{X: 256.0, Y: 168.0}
+	carryall.velocity = pixel.Vec{X: 0.0, Y: 0.5}
+
+	gameEntities = gameEntities.Add(&carryall)
 
 	p1.position = pixel.Vec{X: 256.0, Y: 256.0}
+	p1.carryall = &carryall
 
 	mc = newMidiController()
 	defer mc.close()
@@ -100,7 +75,7 @@ func run() {
 	monitor := pixelgl.PrimaryMonitor()
 
 	monW, monH = monitor.Size()
-	pixSize = 3.0
+	zoom = 30.0
 
 	cfg := pixelgl.WindowConfig{
 		Title:   "Carryall",
@@ -114,17 +89,19 @@ func run() {
 		panic(err)
 	}
 
-	// Zoom in to get nice pixels
+	// Get nice pixels
 	win.SetSmooth(false)
-	win.SetMatrix(pixel.IM.Scaled(pixel.ZV, pixSize))
-	win.SetMousePosition(pixel.Vec{X: monW / 2.0, Y: monH / 2.0})
+	win.SetMousePosition(pixel.Vec{X: monW, Y: monH})
 
 	mapCanvas := pixelgl.NewCanvas(pixel.R(0, 0, float64(gameWorld.PixelWidth()), float64(gameWorld.PixelHeight())))
 	gameWorld.Draw(mapCanvas)
 
-	p1view := pixelgl.NewCanvas(pixel.R(0, 0, monW/pixSize, monH/pixSize))
 	last := time.Now()
 	for !win.Closed() {
+		win.SetMatrix(pixel.IM.Scaled(pixel.ZV, zoom/100.0))
+		p1view := pixelgl.NewCanvas(pixel.R(0, 0, monW/(zoom/100.0), monH/(zoom/100.0)))
+		p1.position = p1.carryall.position
+
 		if win.Pressed(pixelgl.KeyEscape) {
 			break
 		}

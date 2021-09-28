@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"math"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -73,9 +74,7 @@ func main() {
 
 func run() {
 	monitor := pixelgl.PrimaryMonitor()
-
 	monW, monH = monitor.Size()
-	zoom = 30.0
 
 	cfg := pixelgl.WindowConfig{
 		Title:   "Carryall",
@@ -98,8 +97,12 @@ func run() {
 
 	last := time.Now()
 	for !win.Closed() {
-		win.SetMatrix(pixel.IM.Scaled(pixel.ZV, zoom/100.0))
-		p1view := pixelgl.NewCanvas(pixel.R(0, 0, monW/(zoom/100.0), monH/(zoom/100.0)))
+		avgVelocity := p1.carryall.avgVelocity.average()
+		percMax := (avgVelocity / 200.0)
+		zoom := 4.0 / (math.Pow(2.0, 3.0*percMax))
+
+		win.SetMatrix(pixel.IM.Scaled(pixel.ZV, zoom))
+		p1view := pixelgl.NewCanvas(pixel.R(0, 0, monW/zoom, monH/zoom))
 		p1.position = p1.carryall.position
 
 		if win.Pressed(pixelgl.KeyEscape) {

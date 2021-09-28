@@ -29,6 +29,7 @@ type Carryall struct {
 	bodyRotation   float64
 	engineRotation float64
 	velocity       pixel.Vec
+	avgVelocity    *movingAverage
 
 	// Input counters
 	leftPanTicks  int64
@@ -59,6 +60,7 @@ func NewCarryall(mobSprites, mobSprites32 *piksele.Spriteset) Carryall {
 		rightBalVal: 0.5,
 		// Starts vertical, but needs to be horizontal
 		engineRotation: -3.14 / 2.0,
+		avgVelocity:    newMovingAverage(0.0, 2000, time.Millisecond),
 
 		body: &piksele.Sprite{
 			Spriteset: mobSprites32,
@@ -168,16 +170,7 @@ func (s *Carryall) Step(dt float64) {
 		s.bodyRotation = 0.0
 	}
 
-	// Vmax around 200.0 right now. Want zoom of 4.0 when stationary and 1.0 when fast.
-	zoom -= zoom / 100.0
-	if s.velocity.Len() == 0.0 {
-		zoom += 4.0
-	} else if s.velocity.Len() > 200.0 {
-		zoom += 1.0
-	} else {
-		percMax := (s.velocity.Len() / 200.0)
-		zoom += 1.0 + (1.0-percMax)*3.0
-	}
+	s.avgVelocity.sample(s.velocity.Len())
 }
 
 func (s *Carryall) Input(win *pixelgl.Window, ref pixel.Matrix) {

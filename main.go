@@ -98,12 +98,12 @@ func run() {
 	last := time.Now()
 	for !win.Closed() {
 		avgVelocity := p1.carryall.avgVelocity.average()
-		percMax := (avgVelocity / 200.0)
+		percMax := (avgVelocity.Len() / 200.0)
 		zoom := 4.0 / (math.Pow(2.0, 3.0*percMax))
 
 		win.SetMatrix(pixel.IM.Scaled(pixel.ZV, zoom))
 		p1view := pixelgl.NewCanvas(pixel.R(0, 0, monW/zoom, monH/zoom))
-		p1.position = p1.carryall.position
+		p1.position = p1.carryall.position.Add(p1.carryall.avgVelocity.average())
 
 		if win.Pressed(pixelgl.KeyEscape) {
 			break

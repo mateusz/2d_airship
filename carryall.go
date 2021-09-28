@@ -60,7 +60,7 @@ func NewCarryall(mobSprites, mobSprites32 *piksele.Spriteset) Carryall {
 		rightBalVal: 0.5,
 		// Starts vertical, but needs to be horizontal
 		engineRotation: -3.14 / 2.0,
-		avgVelocity:    newMovingAverage(0.0, 2000, time.Millisecond),
+		avgVelocity:    newMovingAverage(pixel.Vec{}, 2000, time.Millisecond),
 
 		body: &piksele.Sprite{
 			Spriteset: mobSprites32,
@@ -170,7 +170,7 @@ func (s *Carryall) Step(dt float64) {
 		s.bodyRotation = 0.0
 	}
 
-	s.avgVelocity.sample(s.velocity.Len())
+	s.avgVelocity.sample(s.velocity)
 }
 
 func (s *Carryall) Input(win *pixelgl.Window, ref pixel.Matrix) {

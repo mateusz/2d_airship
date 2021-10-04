@@ -5,6 +5,7 @@ go 1.15
 require (
 	github.com/faiface/pixel v0.10.0
 	github.com/lafriks/go-tiled v0.5.0
+	github.com/lucasb-eyer/go-colorful v1.2.0
 	github.com/pelletier/go-toml v1.9.4 // indirect
 	gitlab.com/gomidi/midi v1.23.7
 	gitlab.com/gomidi/midicat v0.4.0 // indirect

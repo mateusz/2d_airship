@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"image/color"
 	"math"
 	"math/rand"
 	"os"
@@ -16,18 +17,19 @@ import (
 )
 
 var (
-	workDir       string
-	monW          float64
-	monH          float64
-	zoom          float64
-	mobSprites    piksele.Spriteset
-	mobSprites32  piksele.Spriteset
-	cursorSprites piksele.Spriteset
-	p1            player
-	gameWorld     piksele.World
-	gameEntities  engine.Entities
-	mc            midiController
-	startTime     time.Time
+	workDir        string
+	monW           float64
+	monH           float64
+	zoom           float64
+	mobSprites     piksele.Spriteset
+	mobSprites32   piksele.Spriteset
+	cursorSprites  piksele.Spriteset
+	p1             player
+	gameWorld      piksele.World
+	gameEntities   engine.Entities
+	mc             midiController
+	startTime      time.Time
+	mainBackground background
 )
 
 func main() {
@@ -42,7 +44,7 @@ func main() {
 	}
 
 	gameWorld = piksele.World{}
-	gameWorld.Load(fmt.Sprintf("%s/assets/level2.tmx", workDir))
+	gameWorld.Load(fmt.Sprintf("%s/assets/level3.tmx", workDir))
 
 	mobSprites, err = piksele.NewSpritesetFromTsx(fmt.Sprintf("%s/assets", workDir), "sprites.tsx")
 	if err != nil {
@@ -58,7 +60,7 @@ func main() {
 
 	gameEntities = engine.NewEntities()
 	carryall := NewCarryall(&mobSprites, &mobSprites32)
-	carryall.position = pixel.Vec{X: 256.0, Y: 168.0}
+	carryall.position = pixel.Vec{X: 768.0, Y: 168.0}
 	carryall.velocity = pixel.Vec{X: 0.0, Y: 0.5}
 
 	gameEntities = gameEntities.Add(&carryall)
@@ -68,6 +70,15 @@ func main() {
 
 	mc = newMidiController()
 	defer mc.close()
+
+	mainBackground = newBackogrund(16.0, []stripe{
+		{pos: -20, colour: makeColourful(colornames.Black)},
+		{pos: 0, colour: makeColourful(colornames.Saddlebrown)},
+		{pos: 9, colour: makeColourful(color.RGBA{R: 217, G: 160, B: 102, A: 255})},
+		{pos: 10, colour: makeColourful(colornames.Lightblue)},
+		{pos: 30, colour: makeColourful(colornames.Mediumblue)},
+		{pos: 50, colour: makeColourful(colornames.Black)},
+	})
 
 	pixelgl.Run(run)
 }
@@ -96,44 +107,78 @@ func run() {
 	gameWorld.Draw(mapCanvas)
 
 	last := time.Now()
+	var avgVelocity pixel.Vec
+	var percMax, zoom, dt float64
+	var cam1 pixel.Matrix
+	var cam1bg pixel.Matrix
 	for !win.Closed() {
-		avgVelocity := p1.carryall.avgVelocity.average()
-		percMax := (avgVelocity.Len() / 200.0)
-		zoom := 4.0 / (math.Pow(2.0, 3.0*percMax))
+		avgVelocity = p1.carryall.avgVelocity.average()
+		percMax = (avgVelocity.Len() / 200.0)
+		zoom = 4.0 / (math.Pow(2.0, 2.0*percMax))
 
 		win.SetMatrix(pixel.IM.Scaled(pixel.ZV, zoom))
-		p1view := pixelgl.NewCanvas(pixel.R(0, 0, monW/zoom, monH/zoom))
+
 		p1.position = p1.carryall.position.Add(p1.carryall.avgVelocity.average())
 
 		if win.Pressed(pixelgl.KeyEscape) {
 			break
 		}
 
-		dt := time.Since(last).Seconds()
+		dt = time.Since(last).Seconds()
 		last = time.Now()
 
+		p1view := pixelgl.NewCanvas(pixel.R(0, 0, monW/zoom, monH/zoom))
 		// Move player's view
-		cam1 := pixel.IM.Moved(pixel.Vec{
+		cam1 = pixel.IM.Moved(pixel.Vec{
 			X: -p1.position.X + p1view.Bounds().W()/2,
 			Y: -p1.position.Y + p1view.Bounds().H()/2,
 		})
 		p1view.SetMatrix(cam1)
 
+		p1bg := pixelgl.NewCanvas(pixel.R(0, 0, monW/zoom, monH/zoom))
+		cam1bg = pixel.IM.Moved(pixel.Vec{
+			Y: -p1.position.Y + p1view.Bounds().H()/2,
+		})
+		p1bg.SetMatrix(cam1bg)
+
 		// Update world state
 		p1.Input(win, cam1)
 		p1.Update(dt)
+
+		if p1.carryall.position.X < 0.0 {
+			p1.carryall.position.X += mapCanvas.Bounds().W()
+		}
+		if p1.carryall.position.X >= mapCanvas.Bounds().W() {
+			p1.carryall.position.X -= mapCanvas.Bounds().W()
+		}
 
 		gameEntities.Input(win, cam1)
 		gameEntities.MidiInput(mc.queue)
 		gameEntities.Step(dt)
 
 		// Clean up for new frame
-		win.Clear(colornames.Black)
-		p1view.Clear(colornames.Green)
+		win.Clear(colornames.Navy)
+		p1view.Clear(color.RGBA{A: 0.0})
+		p1bg.Clear(colornames.Lightgreen)
+
+		// Draw stripy background
+		mainBackground.Draw(p1bg)
+		p1bg.Draw(win, pixel.IM.Moved(pixel.Vec{
+			X: p1bg.Bounds().W() / 2,
+			Y: p1bg.Bounds().H() / 2,
+		}))
 
 		// Draw transformed map
 		mapCanvas.Draw(p1view, pixel.IM.Moved(pixel.Vec{
 			X: mapCanvas.Bounds().W() / 2.0,
+			Y: mapCanvas.Bounds().H() / 2.0,
+		}))
+		mapCanvas.Draw(p1view, pixel.IM.Moved(pixel.Vec{
+			X: mapCanvas.Bounds().W()/2.0 + mapCanvas.Bounds().W(),
+			Y: mapCanvas.Bounds().H() / 2.0,
+		}))
+		mapCanvas.Draw(p1view, pixel.IM.Moved(pixel.Vec{
+			X: mapCanvas.Bounds().W()/2.0 - mapCanvas.Bounds().W(),
 			Y: mapCanvas.Bounds().H() / 2.0,
 		}))
 

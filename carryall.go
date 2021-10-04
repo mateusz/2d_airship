@@ -51,7 +51,7 @@ func NewCarryall(mobSprites, mobSprites32 *piksele.Spriteset) Carryall {
 		stabilityPower:      1.0,
 		engineRotationLimit: math.Pi / 4.0,
 		engineRotationSpeed: 1.0 / 8.0,
-		enginePower:         3.0,
+		enginePower:         4.0,
 		drag:                0.01,
 		bounceDampen:        pixel.Vec{X: 0.75, Y: -0.5},
 

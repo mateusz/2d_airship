@@ -17,7 +17,7 @@ type midiController struct {
 	in     midi.In
 }
 
-func newMidiController() midiController {
+func newMidiController() (midiController, error) {
 	mc := midiController{
 		queue: make(chan midi.Message, 128),
 	}
@@ -25,25 +25,21 @@ func newMidiController() midiController {
 	var err error
 	mc.driver, err = driver.New()
 	if err != nil {
-		fmt.Printf("Error loading midi driver: %s\n", err)
-		os.Exit(2)
+		return mc, fmt.Errorf("Error loading midi driver: %s\n", err)
 	}
 
 	midiIns, err := mc.driver.Ins()
 	if err != nil {
-		fmt.Printf("Error getting midi inputs: %s\n", err)
-		os.Exit(2)
+		return mc, fmt.Errorf("Error getting midi inputs: %s\n", err)
 	}
 	if len(midiIns) == 0 {
-		fmt.Print("Error getting midi inputs: no midi devices found\n")
-		os.Exit(2)
+		return mc, fmt.Errorf("Error getting midi inputs: no midi devices found\n")
 	}
 	mc.in = midiIns[0]
 
 	err = mc.in.Open()
 	if err != nil {
-		fmt.Printf("Error opening midi: %s\n", err)
-		os.Exit(2)
+		return mc, fmt.Errorf("Error opening midi: %s\n", err)
 	}
 
 	err = reader.New(
@@ -53,19 +49,22 @@ func newMidiController() midiController {
 		}),
 	).ListenTo(mc.in)
 	if err != nil {
-		fmt.Printf("Error listening to midi: %s\n", err)
-		os.Exit(2)
+		return mc, fmt.Errorf("Error listening to midi: %s\n", err)
 	}
 
-	return mc
+	return mc, nil
 }
 
 func (mc midiController) close() {
-	err := mc.in.StopListening()
-	if err != nil {
-		fmt.Printf("Error stopping midi: %s\n", err)
-		os.Exit(2)
+	if mc.in != nil {
+		err := mc.in.StopListening()
+		if err != nil {
+			fmt.Printf("Error stopping midi: %s\n", err)
+			os.Exit(2)
+		}
+		mc.in.Close()
 	}
-	mc.in.Close()
-	mc.driver.Close()
+	if mc.driver != nil {
+		mc.driver.Close()
+	}
 }

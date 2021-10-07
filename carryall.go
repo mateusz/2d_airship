@@ -60,7 +60,7 @@ func NewCarryall(mobSprites, mobSprites32 *piksele.Spriteset) Carryall {
 		rightBalVal: 0.5,
 		// Starts vertical, but needs to be horizontal
 		engineRotation: -3.14 / 2.0,
-		avgVelocity:    newMovingAverage(pixel.Vec{}, 2000, time.Millisecond),
+		avgVelocity:    newMovingAverage(pixel.Vec{}, 1000, time.Millisecond),
 
 		body: &piksele.Sprite{
 			Spriteset: mobSprites32,
@@ -170,11 +170,26 @@ func (s *Carryall) Step(dt float64) {
 		s.bodyRotation = 0.0
 	}
 
-	s.avgVelocity.sample(s.velocity)
+	if s.velocity.Len() < 100.0 {
+		s.avgVelocity.sample(s.velocity)
+	} else {
+		s.avgVelocity.sample(s.velocity.Unit().Scaled(100.0))
+	}
 }
 
 func (s *Carryall) Input(win *pixelgl.Window, ref pixel.Matrix) {
-
+	if win.Pressed(pixelgl.KeyLeft) {
+		s.velocity = s.velocity.Add(pixel.Vec{X: -10.0})
+	}
+	if win.Pressed(pixelgl.KeyRight) {
+		s.velocity = s.velocity.Add(pixel.Vec{X: 10.0})
+	}
+	if win.Pressed(pixelgl.KeyUp) {
+		s.velocity = s.velocity.Add(pixel.Vec{Y: 10.0})
+	}
+	if win.Pressed(pixelgl.KeyDown) {
+		s.velocity = s.velocity.Add(pixel.Vec{Y: -10.0})
+	}
 }
 
 func (s *Carryall) MidiInput(msgs []midi.Message) {

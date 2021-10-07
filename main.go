@@ -68,16 +68,17 @@ func main() {
 	p1.position = pixel.Vec{X: 256.0, Y: 256.0}
 	p1.carryall = &carryall
 
-	mc = newMidiController()
+	mc, err = newMidiController()
 	defer mc.close()
 
 	mainBackground = newBackogrund(16.0, []stripe{
 		{pos: -20, colour: makeColourful(colornames.Black)},
 		{pos: 0, colour: makeColourful(colornames.Saddlebrown)},
 		{pos: 9, colour: makeColourful(color.RGBA{R: 217, G: 160, B: 102, A: 255})},
-		{pos: 10, colour: makeColourful(colornames.Lightblue)},
-		{pos: 30, colour: makeColourful(colornames.Mediumblue)},
-		{pos: 50, colour: makeColourful(colornames.Black)},
+		{pos: 10, colour: makeColourful(colornames.Green)},
+		{pos: 30, colour: makeColourful(colornames.Pink)},
+		{pos: 50, colour: makeColourful(colornames.Red)},
+		{pos: 70, colour: makeColourful(colornames.Black)},
 	})
 
 	pixelgl.Run(run)
@@ -112,22 +113,26 @@ func run() {
 	var cam1 pixel.Matrix
 	var cam1bg pixel.Matrix
 	for !win.Closed() {
+		if win.JustPressed(pixelgl.KeyEscape) {
+			break
+		}
+
+		// Clean up for new frame
+		//win.Clear(colornames.Navy)
 		avgVelocity = p1.carryall.avgVelocity.average()
 		percMax = (avgVelocity.Len() / 200.0)
 		zoom = 4.0 / (math.Pow(2.0, 2.0*percMax))
+		p1view := pixelgl.NewCanvas(pixel.R(0, 0, monW/zoom, monH/zoom))
+		p1bg := pixelgl.NewCanvas(pixel.R(0, 0, monW/zoom, monH/zoom))
 
+		win.Clear(colornames.Navy)
 		win.SetMatrix(pixel.IM.Scaled(pixel.ZV, zoom))
 
 		p1.position = p1.carryall.position.Add(p1.carryall.avgVelocity.average())
 
-		if win.Pressed(pixelgl.KeyEscape) {
-			break
-		}
-
 		dt = time.Since(last).Seconds()
 		last = time.Now()
 
-		p1view := pixelgl.NewCanvas(pixel.R(0, 0, monW/zoom, monH/zoom))
 		// Move player's view
 		cam1 = pixel.IM.Moved(pixel.Vec{
 			X: -p1.position.X + p1view.Bounds().W()/2,
@@ -135,7 +140,6 @@ func run() {
 		})
 		p1view.SetMatrix(cam1)
 
-		p1bg := pixelgl.NewCanvas(pixel.R(0, 0, monW/zoom, monH/zoom))
 		cam1bg = pixel.IM.Moved(pixel.Vec{
 			Y: -p1.position.Y + p1view.Bounds().H()/2,
 		})
@@ -155,11 +159,6 @@ func run() {
 		gameEntities.Input(win, cam1)
 		gameEntities.MidiInput(mc.queue)
 		gameEntities.Step(dt)
-
-		// Clean up for new frame
-		win.Clear(colornames.Navy)
-		p1view.Clear(color.RGBA{A: 0.0})
-		p1bg.Clear(colornames.Lightgreen)
 
 		// Draw stripy background
 		mainBackground.Draw(p1bg)

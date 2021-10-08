@@ -7,6 +7,7 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
+	"runtime/pprof"
 	"time"
 
 	"github.com/faiface/pixel"
@@ -102,50 +103,34 @@ func run() {
 
 	// Get nice pixels
 	win.SetSmooth(false)
-	win.SetMousePosition(pixel.Vec{X: monW, Y: monH})
+	win.SetMousePosition(pixel.Vec{X: monW / 2.0, Y: 0.0})
 
 	mapCanvas := pixelgl.NewCanvas(pixel.R(0, 0, float64(gameWorld.PixelWidth()), float64(gameWorld.PixelHeight())))
 	gameWorld.Draw(mapCanvas)
 
 	last := time.Now()
 	var avgVelocity pixel.Vec
-	var percMax, zoom, dt float64
+	var percMax, zoom float64
+	var dt float64
 	var cam1 pixel.Matrix
-	var cam1bg pixel.Matrix
+	var worldOffset pixel.Matrix
+
+	prof, _ := os.Create("cpuprof.prof")
+	defer prof.Close()
+	defer pprof.StopCPUProfile()
+	pprof.StartCPUProfile(prof)
+	p1view := pixelgl.NewCanvas(pixel.R(0, 0, monW, monH))
+	p1bg := pixelgl.NewCanvas(pixel.R(0, 0, monW, monH))
 	for !win.Closed() {
+		// Exit conditions
 		if win.JustPressed(pixelgl.KeyEscape) {
 			break
 		}
 
-		// Clean up for new frame
-		//win.Clear(colornames.Navy)
-		avgVelocity = p1.carryall.avgVelocity.average()
-		percMax = (avgVelocity.Len() / 200.0)
-		zoom = 4.0 / (math.Pow(2.0, 2.0*percMax))
-		p1view := pixelgl.NewCanvas(pixel.R(0, 0, monW/zoom, monH/zoom))
-		p1bg := pixelgl.NewCanvas(pixel.R(0, 0, monW/zoom, monH/zoom))
-
-		win.Clear(colornames.Navy)
-		win.SetMatrix(pixel.IM.Scaled(pixel.ZV, zoom))
-
-		p1.position = p1.carryall.position.Add(p1.carryall.avgVelocity.average())
-
+		// Update world state
 		dt = time.Since(last).Seconds()
 		last = time.Now()
 
-		// Move player's view
-		cam1 = pixel.IM.Moved(pixel.Vec{
-			X: -p1.position.X + p1view.Bounds().W()/2,
-			Y: -p1.position.Y + p1view.Bounds().H()/2,
-		})
-		p1view.SetMatrix(cam1)
-
-		cam1bg = pixel.IM.Moved(pixel.Vec{
-			Y: -p1.position.Y + p1view.Bounds().H()/2,
-		})
-		p1bg.SetMatrix(cam1bg)
-
-		// Update world state
 		p1.Input(win, cam1)
 		p1.Update(dt)
 
@@ -160,14 +145,25 @@ func run() {
 		gameEntities.MidiInput(mc.queue)
 		gameEntities.Step(dt)
 
-		// Draw stripy background
-		mainBackground.Draw(p1bg)
-		p1bg.Draw(win, pixel.IM.Moved(pixel.Vec{
-			X: p1bg.Bounds().W() / 2,
-			Y: p1bg.Bounds().H() / 2,
-		}))
+		// Paint
+		win.Clear(colornames.Navy)
+		p1view.Clear(color.RGBA{A: 0.0})
+		p1bg.Clear(colornames.Lightgreen)
 
-		// Draw transformed map
+		avgVelocity = p1.carryall.avgVelocity.average()
+		percMax = (avgVelocity.Len() / 200.0)
+		zoom = 4.0 / (math.Pow(2.0, 2.0*percMax))
+		p1.position = p1.carryall.position.Add(p1.carryall.avgVelocity.average())
+
+		worldOffset = pixel.IM
+		worldOffset = worldOffset.Moved(p1.position.Scaled(-1.0))
+		worldOffset = worldOffset.Scaled(pixel.Vec{}, zoom)
+		worldOffset = worldOffset.Moved(pixel.Vec{X: monW / 2.0, Y: monH / 2.0})
+		p1view.SetMatrix(worldOffset)
+		p1bg.SetMatrix(worldOffset)
+
+		mainBackground.Draw(p1bg, -mapCanvas.Bounds().W(), mapCanvas.Bounds().W()*2)
+
 		mapCanvas.Draw(p1view, pixel.IM.Moved(pixel.Vec{
 			X: mapCanvas.Bounds().W() / 2.0,
 			Y: mapCanvas.Bounds().H() / 2.0,
@@ -181,16 +177,16 @@ func run() {
 			Y: mapCanvas.Bounds().H() / 2.0,
 		}))
 
-		// Draw transformed mobs
 		gameEntities.ByZ().Draw(p1view)
 
-		// Blit player view
+		p1bg.Draw(win, pixel.IM.Moved(pixel.Vec{
+			X: p1bg.Bounds().W() / 2,
+			Y: p1bg.Bounds().H() / 2,
+		}))
 		p1view.Draw(win, pixel.IM.Moved(pixel.Vec{
 			X: p1view.Bounds().W() / 2,
 			Y: p1view.Bounds().H() / 2,
 		}))
-
-		// Present frame!
 		win.Update()
 	}
 }

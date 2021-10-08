@@ -40,7 +40,7 @@ func newBackogrund(t float64, s []stripe) background {
 	}
 }
 
-func (b *background) Draw(c *pixelgl.Canvas) {
+func (b *background) Draw(c *pixelgl.Canvas, xStart, xEnd float64) {
 
 	bg := imdraw.New(nil)
 
@@ -49,8 +49,8 @@ func (b *background) Draw(c *pixelgl.Canvas) {
 		yEnd := yStart + b.stripeThickness
 
 		bg.Color = s.colour
-		bg.Push(pixel.V(0, yStart))
-		bg.Push(pixel.V(c.Bounds().W(), yEnd))
+		bg.Push(pixel.V(xStart, yStart))
+		bg.Push(pixel.V(xEnd, yEnd))
 		bg.Rectangle(0)
 
 		colour := s.colour
@@ -68,8 +68,8 @@ func (b *background) Draw(c *pixelgl.Canvas) {
 			yEnd += b.stripeThickness
 
 			bg.Color = colour
-			bg.Push(pixel.V(0, yStart))
-			bg.Push(pixel.V(c.Bounds().W(), yEnd))
+			bg.Push(pixel.V(xStart, yStart))
+			bg.Push(pixel.V(xEnd, yEnd))
 			bg.Rectangle(0)
 		}
 	}

@@ -31,6 +31,7 @@ var (
 	mc             midiController
 	startTime      time.Time
 	mainBackground background
+	freq           float64
 )
 
 func main() {
@@ -82,6 +83,9 @@ func main() {
 		{pos: 70, colour: makeColourful(colornames.Black)},
 	})
 
+	freq = 80.0
+	go initAudio()
+
 	pixelgl.Run(run)
 }
 
@@ -114,13 +118,14 @@ func run() {
 	var dt float64
 	var cam1 pixel.Matrix
 	var worldOffset pixel.Matrix
+	p1view := pixelgl.NewCanvas(pixel.R(0, 0, monW, monH))
+	p1bg := pixelgl.NewCanvas(pixel.R(0, 0, monW, monH))
 
 	prof, _ := os.Create("cpuprof.prof")
 	defer prof.Close()
 	defer pprof.StopCPUProfile()
 	pprof.StartCPUProfile(prof)
-	p1view := pixelgl.NewCanvas(pixel.R(0, 0, monW, monH))
-	p1bg := pixelgl.NewCanvas(pixel.R(0, 0, monW, monH))
+
 	for !win.Closed() {
 		// Exit conditions
 		if win.JustPressed(pixelgl.KeyEscape) {
@@ -144,6 +149,11 @@ func run() {
 		gameEntities.Input(win, cam1)
 		gameEntities.MidiInput(mc.queue)
 		gameEntities.Step(dt)
+
+		// Update audio
+		audioMutex.Lock()
+		freq = p1.carryall.velocity.Len()/12.0 + 30.0
+		audioMutex.Unlock()
 
 		// Paint
 		win.Clear(colornames.Navy)

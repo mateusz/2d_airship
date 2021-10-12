@@ -4,6 +4,7 @@ go 1.15
 
 require (
 	github.com/faiface/pixel v0.10.0
+	github.com/gordonklaus/portaudio v0.0.0-20200911161147-bb74aa485641
 	github.com/lafriks/go-tiled v0.5.0
 	github.com/lucasb-eyer/go-colorful v1.2.0
 	github.com/pelletier/go-toml v1.9.4 // indirect

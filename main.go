@@ -13,6 +13,7 @@ import (
 	"github.com/faiface/pixel"
 	"github.com/faiface/pixel/pixelgl"
 	engine "github.com/mateusz/carryall/engine/entities"
+	"github.com/mateusz/carryall/engine/sid"
 	"github.com/mateusz/carryall/piksele"
 	"golang.org/x/image/colornames"
 )
@@ -32,6 +33,8 @@ var (
 	startTime      time.Time
 	mainBackground background
 	freq           float64
+	audio          *sid.Sid
+	engineSound    *sid.Vibrato
 )
 
 func main() {
@@ -83,8 +86,12 @@ func main() {
 		{pos: 70, colour: makeColourful(colornames.Black)},
 	})
 
-	freq = 80.0
-	go initAudio()
+	audio = sid.New(map[string]*sid.Channel{
+		"osc1": sid.NewChannel(1.0),
+	})
+	engineSound = sid.NewVibrato(20.0, 1.02, 1.05)
+	audio.SetSource("osc1", engineSound)
+	audio.Start(44100.0)
 
 	pixelgl.Run(run)
 }
@@ -150,10 +157,12 @@ func run() {
 		gameEntities.MidiInput(mc.queue)
 		gameEntities.Step(dt)
 
-		// Update audio
-		audioMutex.Lock()
-		freq = p1.carryall.velocity.Len()/12.0 + 30.0
-		audioMutex.Unlock()
+		// Sound
+		f := (p1.carryall.velocity.Len() / 10.0) + 20.0
+		if f > 80.0 {
+			f = 80.0
+		}
+		engineSound.SetFreq(f)
 
 		// Paint
 		win.Clear(colornames.Navy)
@@ -199,4 +208,6 @@ func run() {
 		}))
 		win.Update()
 	}
+
+	audio.Close()
 }

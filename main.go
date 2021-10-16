@@ -87,10 +87,12 @@ func main() {
 	})
 
 	audio = sid.New(map[string]*sid.Channel{
-		"osc1": sid.NewChannel(1.0),
+		"osc1":  sid.NewChannel(0.8),
+		"noise": sid.NewChannel(0.2),
 	})
 	engineSound = sid.NewVibrato(20.0, 1.02, 1.05)
 	audio.SetSource("osc1", engineSound)
+	audio.SetSource("noise", sid.NewPinkNoise(10))
 	audio.Start(44100.0)
 
 	pixelgl.Run(run)

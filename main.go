@@ -35,6 +35,7 @@ var (
 	freq           float64
 	audio          *sid.Sid
 	engineSound    *sid.Vibrato
+	whoosh         *sid.PinkNoise
 )
 
 func main() {
@@ -87,12 +88,15 @@ func main() {
 	})
 
 	audio = sid.New(map[string]*sid.Channel{
-		"osc1":  sid.NewChannel(0.8),
-		"noise": sid.NewChannel(0.2),
+		"engine": sid.NewChannel(0.5),
+		"whoosh": sid.NewChannel(0.1),
 	})
 	engineSound = sid.NewVibrato(20.0, 1.02, 1.05)
-	audio.SetSource("osc1", engineSound)
-	audio.SetSource("noise", sid.NewPinkNoise(10))
+	audio.SetSource("engine", engineSound)
+
+	whoosh = sid.NewPinkNoise(5)
+	audio.SetSource("whoosh", whoosh)
+
 	audio.Start(44100.0)
 
 	pixelgl.Run(run)
@@ -127,6 +131,7 @@ func run() {
 	var dt float64
 	var cam1 pixel.Matrix
 	var worldOffset pixel.Matrix
+	var whooshVol, totalPower, totalThrottle float64
 	p1view := pixelgl.NewCanvas(pixel.R(0, 0, monW, monH))
 	p1bg := pixelgl.NewCanvas(pixel.R(0, 0, monW, monH))
 
@@ -160,11 +165,17 @@ func run() {
 		gameEntities.Step(dt)
 
 		// Sound
-		f := (p1.carryall.velocity.Len() / 10.0) + 20.0
-		if f > 80.0 {
-			f = 80.0
+		// Map to [0.0 - 1.0]
+		whooshVol = p1.carryall.velocity.Len() / 200.0
+		if whooshVol > 200.0 {
+			whooshVol = 1.0
 		}
-		engineSound.SetFreq(f)
+		audio.SetVolume("whoosh", 0.2*whooshVol*whooshVol)
+
+		// Map controls to [0.0 - 1.0]
+		totalPower = p1.carryall.stabilityPower + p1.carryall.enginePower
+		totalThrottle = p1.carryall.leftBalVal*(p1.carryall.stabilityPower/totalPower) + math.Abs(p1.carryall.rightBalVal-0.5)*2.0*(p1.carryall.enginePower/totalPower)
+		engineSound.SetFreq(totalThrottle*20.0 + 10.0)
 
 		// Paint
 		win.Clear(colornames.Navy)

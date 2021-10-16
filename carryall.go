@@ -35,7 +35,7 @@ type Carryall struct {
 	leftPanTicks  int64
 	leftBalVal    float64 // Absolute value [0.0,1.0]
 	rightPanTicks int64
-	rightBalVal   float64 // Absolute value [0.0,1.0
+	rightBalVal   float64 // Absolute value [0.0,1.0]
 
 	// Sprites
 	body         *piksele.Sprite

@@ -88,14 +88,14 @@ func main() {
 	})
 
 	audio = sid.New(map[string]*sid.Channel{
-		"engine": sid.NewChannel(0.5),
-		"whoosh": sid.NewChannel(0.1),
+		"engine":       sid.NewChannel(0.5),
+		"engineWhoosh": sid.NewChannel(0.1),
 	})
 	engineSound = sid.NewVibrato(20.0, 1.02, 1.05)
 	audio.SetSource("engine", engineSound)
 
 	whoosh = sid.NewPinkNoise(5)
-	audio.SetSource("whoosh", whoosh)
+	audio.SetSource("engineWhoosh", whoosh)
 
 	audio.Start(44100.0)
 
@@ -167,10 +167,10 @@ func run() {
 		// Sound
 		// Map to [0.0 - 1.0]
 		whooshVol = p1.carryall.velocity.Len() / 200.0
-		if whooshVol > 200.0 {
+		if whooshVol > 1.0 {
 			whooshVol = 1.0
 		}
-		audio.SetVolume("whoosh", 0.2*whooshVol*whooshVol)
+		audio.SetVolume("engineWhoosh", 0.1*math.Pow(whooshVol, 3.0))
 
 		// Map controls to [0.0 - 1.0]
 		totalPower = p1.carryall.stabilityPower + p1.carryall.enginePower

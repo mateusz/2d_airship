@@ -1,6 +1,8 @@
 package sid
 
-import "math/rand"
+import (
+	"math/rand"
+)
 
 type PinkNoise struct {
 	granularity int

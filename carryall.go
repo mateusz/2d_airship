@@ -15,14 +15,17 @@ import (
 
 type Carryall struct {
 	// Various physics settings
-	bodyRotationLimit   float64
-	bodyRotationSpeed   float64
-	stabilityPower      float64
-	engineRotationLimit float64
-	engineRotationSpeed float64
-	enginePower         float64
-	drag                float64
-	bounceDampen        pixel.Vec
+	bodyRotationLimit        float64
+	bodyRotationSpeed        float64
+	stabilityPower           float64
+	currentStabilityPower    float64
+	engineRotationLimit      float64
+	engineRotationSpeed      float64
+	enginePower              float64
+	engineRedirectMultiplier float64
+	currentEnginePower       float64
+	drag                     float64
+	bounceDampen             pixel.Vec
 
 	// State
 	position       pixel.Vec
@@ -37,6 +40,7 @@ type Carryall struct {
 	leftBalVal    float64 // Absolute value [0.0,1.0]
 	rightPanTicks int64
 	rightBalVal   float64 // Absolute value [0.0,1.0]
+	middleBalVal  float64 // Absolute value [0.0,1.0]
 
 	// Sprites
 	body         *piksele.Sprite
@@ -56,9 +60,10 @@ func NewCarryall(mobSprites, mobSprites32 *piksele.Spriteset) Carryall {
 		drag:                0.005,
 		bounceDampen:        pixel.Vec{X: 0.75, Y: -0.5},
 
-		velocity:    pixel.Vec{X: 0.0, Y: gravity.Y},
-		leftBalVal:  0.0,
-		rightBalVal: 0.5,
+		velocity:     pixel.Vec{X: 0.0, Y: gravity.Y},
+		middleBalVal: 0.5,
+		leftBalVal:   0.0,
+		rightBalVal:  0.5,
 		// Starts vertical, but needs to be horizontal
 		engineRotation: -3.14 / 2.0,
 		avgVelocity:    newMovingAverage(pixel.Vec{}, 1000, time.Millisecond),
@@ -89,9 +94,10 @@ func (s Carryall) Draw(onto pixel.Target) {
 		bodyTransform,
 	)
 	frame := uint32(time.Now().Sub(startTime) / (50 * time.Millisecond) % 2)
+	scaleStab := s.currentStabilityPower / s.stabilityPower
 	s.stabilityJet.Spriteset.Sprites[s.stabilityJet.SpriteID+frame].DrawColorMask(
 		onto,
-		pixel.IM.ScaledXY(pixel.Vec{X: 0.0, Y: -3.0}, pixel.Vec{X: 1.0, Y: s.leftBalVal}).Moved(pixel.Vec{X: 0.0, Y: -5.0}).Chained(bodyTransform),
+		pixel.IM.ScaledXY(pixel.Vec{X: 0.0, Y: -3.0}, pixel.Vec{X: 1.0, Y: scaleStab}).Moved(pixel.Vec{X: 0.0, Y: -5.0}).Chained(bodyTransform),
 		color.Alpha{A: 127},
 	)
 
@@ -101,7 +107,7 @@ func (s Carryall) Draw(onto pixel.Target) {
 		engineTransform,
 	)
 	if s.rightBalVal > 0.55 {
-		scale := (s.rightBalVal - 0.5) * 2.0
+		scale := s.currentEnginePower / s.enginePower
 		s.engineJet.Spriteset.Sprites[s.engineJet.SpriteID+frame].DrawColorMask(
 			onto,
 			pixel.IM.ScaledXY(pixel.Vec{X: -1.0, Y: 16.0}, pixel.Vec{X: scale, Y: scale}).Moved(pixel.Vec{X: 1.0, Y: -23.0}).Chained(engineTransform),
@@ -109,10 +115,10 @@ func (s Carryall) Draw(onto pixel.Target) {
 		)
 	}
 	if s.rightBalVal < 0.45 {
-		scale := (0.5 - s.rightBalVal) * 2.0
+		scale := s.currentEnginePower / s.enginePower
 		s.engineJet.Spriteset.Sprites[s.engineJet.SpriteID+frame].DrawColorMask(
 			onto,
-			pixel.IM.ScaledXY(pixel.Vec{X: -1.0, Y: 16.0}, pixel.Vec{X: scale, Y: -scale}).Moved(pixel.Vec{X: 1.0, Y: -8.0}).Chained(engineTransform),
+			pixel.IM.ScaledXY(pixel.Vec{X: -1.0, Y: 16.0}, pixel.Vec{X: scale, Y: scale}).Moved(pixel.Vec{X: 1.0, Y: -8.0}).Chained(engineTransform),
 			color.Alpha{A: 127},
 		)
 	}
@@ -152,10 +158,13 @@ func (s *Carryall) Step(dt float64) {
 		s.engineRotation = jetRangeMax
 	}
 
+	s.currentStabilityPower = s.leftBalVal * (s.stabilityPower * (1.0 - s.middleBalVal))
+	s.currentEnginePower = (s.rightBalVal - 0.5) * 2.0 * (s.enginePower * s.middleBalVal)
+
 	// [0.0, 1.0], this is just for hovering, can't reverse
-	dvBody := pixel.Vec{X: 0, Y: s.leftBalVal * s.stabilityPower}.Rotated(s.bodyRotation)
+	dvBody := pixel.Vec{X: 0, Y: s.currentStabilityPower}.Rotated(s.bodyRotation)
 	// Shifted to [-0.5, 0.5], jets can go backwards. Also increase power - main jet is super-powerful.
-	dvJet := pixel.Vec{X: 0, Y: (s.rightBalVal - 0.5) * s.enginePower}.Rotated(s.bodyRotation).Rotated(s.engineRotation)
+	dvJet := pixel.Vec{X: 0, Y: s.currentEnginePower}.Rotated(s.bodyRotation).Rotated(s.engineRotation)
 
 	atmoPressure := 1.0 - (s.position.Y-1600.0)/1000.0
 	if atmoPressure > 1.0 {
@@ -230,6 +239,11 @@ func (s *Carryall) MidiInput(msgs []midi.Message) {
 			if cc.Channel() == engine.MIDI_CHAN_RIGHT && cc.Controller() == engine.MIDI_CTRL_BALANCE_MSB {
 				// Scaled to 0.0-1.0
 				s.rightBalVal = float64(cc.Value()) / 127
+			}
+
+			if cc.Channel() == engine.MIDI_CHAN_MIDDLE && cc.Controller() == engine.MIDI_CTRL_BANK_SELECT_MSB {
+				// Scaled to 0.0-1.0
+				s.middleBalVal = float64(cc.Value()) / 127
 			}
 		}
 	}

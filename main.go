@@ -135,7 +135,7 @@ func run() {
 	var dt float64
 	var cam1 pixel.Matrix
 	var worldOffset pixel.Matrix
-	var whooshVol, totalPower, totalThrottle float64
+	var whooshVol, maxPower, totalThrottle float64
 	p1view := pixelgl.NewCanvas(pixel.R(0, 0, monW, monH))
 	p1bg := pixelgl.NewCanvas(pixel.R(0, 0, monW, monH))
 	p1bgOverlay := pixelgl.NewCanvas(pixel.R(0, 0, monW, monH))
@@ -178,8 +178,8 @@ func run() {
 		audio.SetVolume("engineWhoosh", 0.15*math.Pow(whooshVol, 1.8))
 
 		// Map controls to [0.0 - 1.0]
-		totalPower = p1.carryall.stabilityPower + p1.carryall.enginePower
-		totalThrottle = p1.carryall.leftBalVal*(p1.carryall.stabilityPower/totalPower) + math.Abs(p1.carryall.rightBalVal-0.5)*2.0*(p1.carryall.enginePower/totalPower)
+		maxPower = p1.carryall.stabilityPower + p1.carryall.enginePower
+		totalThrottle = (p1.carryall.currentStabilityPower + math.Abs(p1.carryall.currentEnginePower)) / maxPower
 		engineSound.SetFreq(math.Sqrt(p1.carryall.velocity.Len()) + 10.0)
 		audio.SetVolume("engine", totalThrottle*0.75+0.25)
 
@@ -200,7 +200,6 @@ func run() {
 		worldOffset = worldOffset.Moved(pixel.Vec{X: monW / 2.0, Y: monH / 2.0})
 		p1view.SetMatrix(worldOffset)
 		p1bg.SetMatrix(worldOffset)
-		//p1bgOverlay.SetMatrix(pixel.IM.Moved(pixel.Vec{X: monW / 2.0, Y: monH / 2.0}))
 
 		mainBackground.Draw(p1bg, -mapCanvas.Bounds().W(), mapCanvas.Bounds().W()*2)
 

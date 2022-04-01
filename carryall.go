@@ -5,13 +5,18 @@ import (
 	"math"
 	"time"
 
+	"github.com/faiface/beep/speaker"
 	"github.com/faiface/pixel"
 	"github.com/faiface/pixel/pixelgl"
 	engine "github.com/mateusz/carryall/engine/entities"
+	"github.com/mateusz/carryall/engine/sid"
 	"github.com/mateusz/carryall/piksele"
 	"gitlab.com/gomidi/midi"
 	"gitlab.com/gomidi/midi/midimessage/channel"
 )
+
+const SID_CHAN_ENGINE = "engine"
+const SID_CHAN_ENGINE_WHOOSH = "engineWhoosh"
 
 type Carryall struct {
 	// Various physics settings
@@ -27,13 +32,18 @@ type Carryall struct {
 	drag                     float64
 	bounceDampen             pixel.Vec
 
+	// Audio
+	engineSound *sid.Vibrato
+
 	// State
-	position       pixel.Vec
-	bodyRotation   float64
-	engineRotation float64
-	velocity       pixel.Vec
-	currentDrag    pixel.Vec
-	avgVelocity    *movingAverage
+	position            pixel.Vec
+	bodyRotation        float64
+	engineRotation      float64
+	velocity            pixel.Vec
+	currentDrag         pixel.Vec
+	avgVelocity         *movingAverage
+	destroyingStart     time.Time
+	destroyingAudioDone bool
 
 	// Input counters
 	leftPanTicks  int64
@@ -47,6 +57,7 @@ type Carryall struct {
 	stabilityJet *piksele.Sprite
 	engine       *piksele.Sprite
 	engineJet    *piksele.Sprite
+	explosion    *piksele.Sprite
 }
 
 func NewCarryall(mobSprites, mobSprites32 *piksele.Spriteset) Carryall {
@@ -84,10 +95,29 @@ func NewCarryall(mobSprites, mobSprites32 *piksele.Spriteset) Carryall {
 			Spriteset: mobSprites32,
 			SpriteID:  SPR_32_ENGINE_JET,
 		},
+		explosion: &piksele.Sprite{
+			Spriteset: mobSprites,
+			SpriteID:  SPR_16_EXPLOSION_START,
+		},
 	}
 }
 
 func (s Carryall) Draw(onto pixel.Target) {
+	if s.destroyingStart.After(startTime) {
+		time.Since(s.destroyingStart)
+		frame := uint32(time.Since(s.destroyingStart) / (50 * time.Millisecond))
+		if SPR_16_EXPLOSION_START+frame > SPR_16_EXPLOSION_END {
+			return
+		}
+
+		bodyTransform := pixel.IM.Scaled(pixel.Vec{X: 0.0, Y: 0.0}, 10.0).Rotated(pixel.Vec{X: 0.0, Y: 0.0}, s.bodyRotation).Moved(s.position)
+		s.explosion.Spriteset.Sprites[s.explosion.SpriteID+frame].Draw(
+			onto,
+			bodyTransform,
+		)
+		return
+	}
+
 	bodyTransform := pixel.IM.Rotated(pixel.Vec{X: 0.0, Y: 0.0}, s.bodyRotation).Moved(s.position)
 	s.body.Spriteset.Sprites[s.body.SpriteID].Draw(
 		onto,
@@ -137,6 +167,10 @@ func (s Carryall) GetY() float64 {
 }
 
 func (s *Carryall) Step(dt float64) {
+	if s.destroyingStart.After(startTime) {
+		return
+	}
+
 	factor := 0.02
 
 	s.bodyRotation += -factor * 3.14 * float64(s.leftPanTicks) * s.bodyRotationSpeed
@@ -182,9 +216,17 @@ func (s *Carryall) Step(dt float64) {
 	s.position = s.position.Add(s.velocity.Scaled(factor))
 
 	if s.position.Y < 167.0 {
+		velocityBefore := s.velocity
 		s.velocity = s.velocity.ScaledXY(s.bounceDampen)
 		s.position.Y = 167.0
 		s.bodyRotation = 0.0
+
+		impactStrength := velocityBefore.Sub(s.velocity).Len()
+		if impactStrength > 100.0 {
+
+			// crash
+			s.destroyingStart = time.Now()
+		}
 	}
 
 	if s.velocity.Len() < 100.0 {
@@ -195,6 +237,10 @@ func (s *Carryall) Step(dt float64) {
 }
 
 func (s *Carryall) Input(win *pixelgl.Window, ref pixel.Matrix) {
+	if s.destroyingStart.After(startTime) {
+		return
+	}
+
 	if win.Pressed(pixelgl.KeyLeft) {
 		s.velocity = s.velocity.Add(pixel.Vec{X: -10.0})
 	}
@@ -210,6 +256,10 @@ func (s *Carryall) Input(win *pixelgl.Window, ref pixel.Matrix) {
 }
 
 func (s *Carryall) MidiInput(msgs []midi.Message) {
+	if s.destroyingStart.After(startTime) {
+		return
+	}
+
 	s.leftPanTicks = 0
 	s.rightPanTicks = 0
 	for _, m := range msgs {
@@ -247,4 +297,46 @@ func (s *Carryall) MidiInput(msgs []midi.Message) {
 			}
 		}
 	}
+}
+
+func (s *Carryall) GetChannels() map[string]*sid.Channel {
+	return map[string]*sid.Channel{
+		SID_CHAN_ENGINE:        sid.NewChannel(0.5),
+		SID_CHAN_ENGINE_WHOOSH: sid.NewChannel(0.1),
+	}
+}
+
+func (s *Carryall) SetupChannels(onto *sid.Sid) {
+	s.engineSound = sid.NewVibrato(20.0, 1.02, 1.05)
+	onto.SetSource(SID_CHAN_ENGINE, s.engineSound)
+
+	onto.SetSource(SID_CHAN_ENGINE_WHOOSH, sid.NewPinkNoise(5))
+
+}
+
+func (s *Carryall) MakeNoise(onto *sid.Sid) {
+	if s.destroyingAudioDone {
+		return
+	}
+	if s.destroyingStart.After(startTime) {
+		onto.SetVolume(SID_CHAN_ENGINE, 0.0)
+		onto.SetVolume(SID_CHAN_ENGINE_WHOOSH, 0.0)
+		speaker.Play(audioSamples[MP3_EXPLOSION].streamer)
+
+		s.destroyingAudioDone = true
+		return
+	}
+
+	// Map to [0.0 - 1.0]
+	whooshVol := s.currentDrag.Len()
+	if whooshVol > 1.0 {
+		whooshVol = 1.0
+	}
+	onto.SetVolume(SID_CHAN_ENGINE_WHOOSH, 0.15*math.Pow(whooshVol, 1.8))
+
+	// Map controls to [0.0 - 1.0]
+	maxPower := p1.carryall.stabilityPower + p1.carryall.enginePower
+	totalThrottle := (p1.carryall.currentStabilityPower + math.Abs(p1.carryall.currentEnginePower)) / maxPower
+	s.engineSound.SetFreq(math.Sqrt(p1.carryall.velocity.Len()) + 10.0)
+	onto.SetVolume(SID_CHAN_ENGINE, totalThrottle*0.75+0.25)
 }

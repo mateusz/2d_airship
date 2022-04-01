@@ -10,6 +10,7 @@ import (
 	"runtime/pprof"
 	"time"
 
+	"github.com/faiface/beep/speaker"
 	"github.com/faiface/pixel"
 	"github.com/faiface/pixel/pixelgl"
 	engine "github.com/mateusz/carryall/engine/entities"
@@ -25,6 +26,7 @@ var (
 	zoom           float64
 	mobSprites     piksele.Spriteset
 	mobSprites32   piksele.Spriteset
+	audioSamples   map[int32]audioSample
 	cursorSprites  piksele.Spriteset
 	p1             player
 	gameWorld      piksele.World
@@ -89,17 +91,18 @@ func main() {
 		{pos: 200, colour: makeColourful(colornames.Black)},
 	})
 
-	audio = sid.New(map[string]*sid.Channel{
-		"engine":       sid.NewChannel(0.5),
-		"engineWhoosh": sid.NewChannel(0.1),
-	})
-	engineSound = sid.NewVibrato(20.0, 1.02, 1.05)
-	audio.SetSource("engine", engineSound)
+	chmap := make(map[string]*sid.Channel)
+	for chName, ch := range p1.carryall.GetChannels() {
+		chmap[chName] = ch
+	}
 
-	whoosh = sid.NewPinkNoise(5)
-	audio.SetSource("engineWhoosh", whoosh)
-
+	audio = sid.New(chmap)
+	carryall.SetupChannels(audio)
 	audio.Start(44100.0)
+
+	audioSamples = make(map[int32]audioSample)
+	audioSamples[MP3_EXPLOSION] = newSampleMp3("explosion")
+	speaker.Init(44100, 8)
 
 	pixelgl.Run(run)
 }
@@ -135,7 +138,6 @@ func run() {
 	var dt float64
 	var cam1 pixel.Matrix
 	var worldOffset pixel.Matrix
-	var whooshVol, maxPower, totalThrottle float64
 	p1view := pixelgl.NewCanvas(pixel.R(0, 0, monW, monH))
 	p1bg := pixelgl.NewCanvas(pixel.R(0, 0, monW, monH))
 	p1bgOverlay := pixelgl.NewCanvas(pixel.R(0, 0, monW, monH))
@@ -170,18 +172,7 @@ func run() {
 		gameEntities.Step(dt)
 
 		// Sound
-		// Map to [0.0 - 1.0]
-		whooshVol = p1.carryall.currentDrag.Len()
-		if whooshVol > 1.0 {
-			whooshVol = 1.0
-		}
-		audio.SetVolume("engineWhoosh", 0.15*math.Pow(whooshVol, 1.8))
-
-		// Map controls to [0.0 - 1.0]
-		maxPower = p1.carryall.stabilityPower + p1.carryall.enginePower
-		totalThrottle = (p1.carryall.currentStabilityPower + math.Abs(p1.carryall.currentEnginePower)) / maxPower
-		engineSound.SetFreq(math.Sqrt(p1.carryall.velocity.Len()) + 10.0)
-		audio.SetVolume("engine", totalThrottle*0.75+0.25)
+		p1.carryall.MakeNoise(audio)
 
 		// Paint
 		win.Clear(colornames.Navy)
@@ -240,4 +231,8 @@ func run() {
 	}
 
 	audio.Close()
+
+	for _, v := range audioSamples {
+		v.streamer.Close()
+	}
 }

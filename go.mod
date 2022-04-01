@@ -3,6 +3,7 @@ module github.com/mateusz/carryall
 go 1.15
 
 require (
+	github.com/faiface/beep v1.1.0 // indirect
 	github.com/faiface/pixel v0.10.0
 	github.com/gordonklaus/portaudio v0.0.0-20200911161147-bb74aa485641
 	github.com/lafriks/go-tiled v0.5.0

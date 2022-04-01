@@ -29,6 +29,7 @@ type Carryall struct {
 	bodyRotation   float64
 	engineRotation float64
 	velocity       pixel.Vec
+	currentDrag    pixel.Vec
 	avgVelocity    *movingAverage
 
 	// Input counters
@@ -52,7 +53,7 @@ func NewCarryall(mobSprites, mobSprites32 *piksele.Spriteset) Carryall {
 		engineRotationLimit: math.Pi / 4.0,
 		engineRotationSpeed: 1.0 / 8.0,
 		enginePower:         4.0,
-		drag:                0.01,
+		drag:                0.005,
 		bounceDampen:        pixel.Vec{X: 0.75, Y: -0.5},
 
 		velocity:    pixel.Vec{X: 0.0, Y: gravity.Y},
@@ -156,9 +157,16 @@ func (s *Carryall) Step(dt float64) {
 	// Shifted to [-0.5, 0.5], jets can go backwards. Also increase power - main jet is super-powerful.
 	dvJet := pixel.Vec{X: 0, Y: (s.rightBalVal - 0.5) * s.enginePower}.Rotated(s.bodyRotation).Rotated(s.engineRotation)
 
-	drag := s.velocity.Scaled(-s.drag)
+	atmoPressure := 1.0 - (s.position.Y-1600.0)/1000.0
+	if atmoPressure > 1.0 {
+		atmoPressure = 1.0
+	}
+	if atmoPressure < 0.0 {
+		atmoPressure = 0.0
+	}
+	s.currentDrag = s.velocity.Scaled(-s.drag).Scaled(atmoPressure)
 
-	s.velocity = s.velocity.Add(drag)
+	s.velocity = s.velocity.Add(s.currentDrag)
 	s.velocity = s.velocity.Add(dvBody)
 	s.velocity = s.velocity.Add(dvJet)
 	s.velocity = s.velocity.Add(gravity)

@@ -32,6 +32,7 @@ var (
 	mc             midiController
 	startTime      time.Time
 	mainBackground background
+	mainStarfield  starfield
 	freq           float64
 	audio          *sid.Sid
 	engineSound    *sid.Vibrato
@@ -83,8 +84,9 @@ func main() {
 		{pos: 9, colour: makeColourful(color.RGBA{R: 217, G: 160, B: 102, A: 255})},
 		{pos: 10, colour: makeColourful(colornames.Green)},
 		{pos: 30, colour: makeColourful(colornames.Pink)},
-		{pos: 50, colour: makeColourful(colornames.Red)},
-		{pos: 70, colour: makeColourful(colornames.Black)},
+		{pos: 70, colour: makeColourful(color.RGBA{R: 170, G: 52, B: 195, A: 255})},
+		{pos: 110, colour: makeColourful(color.RGBA{R: 7, G: 15, B: 78, A: 255})},
+		{pos: 200, colour: makeColourful(colornames.Black)},
 	})
 
 	audio = sid.New(map[string]*sid.Channel{
@@ -105,6 +107,8 @@ func main() {
 func run() {
 	monitor := pixelgl.PrimaryMonitor()
 	monW, monH = monitor.Size()
+
+	mainStarfield = newStarfield(monW, monH)
 
 	cfg := pixelgl.WindowConfig{
 		Title:   "Carryall",
@@ -134,6 +138,7 @@ func run() {
 	var whooshVol, totalPower, totalThrottle float64
 	p1view := pixelgl.NewCanvas(pixel.R(0, 0, monW, monH))
 	p1bg := pixelgl.NewCanvas(pixel.R(0, 0, monW, monH))
+	p1bgOverlay := pixelgl.NewCanvas(pixel.R(0, 0, monW, monH))
 
 	prof, _ := os.Create("cpuprof.prof")
 	defer prof.Close()
@@ -166,21 +171,23 @@ func run() {
 
 		// Sound
 		// Map to [0.0 - 1.0]
-		whooshVol = p1.carryall.velocity.Len() / 200.0
+		whooshVol = p1.carryall.currentDrag.Len()
 		if whooshVol > 1.0 {
 			whooshVol = 1.0
 		}
-		audio.SetVolume("engineWhoosh", 0.1*math.Pow(whooshVol, 3.0))
+		audio.SetVolume("engineWhoosh", 0.15*math.Pow(whooshVol, 1.8))
 
 		// Map controls to [0.0 - 1.0]
 		totalPower = p1.carryall.stabilityPower + p1.carryall.enginePower
 		totalThrottle = p1.carryall.leftBalVal*(p1.carryall.stabilityPower/totalPower) + math.Abs(p1.carryall.rightBalVal-0.5)*2.0*(p1.carryall.enginePower/totalPower)
-		engineSound.SetFreq(totalThrottle*20.0 + 10.0)
+		engineSound.SetFreq(math.Sqrt(p1.carryall.velocity.Len()) + 10.0)
+		audio.SetVolume("engine", totalThrottle*0.75+0.25)
 
 		// Paint
 		win.Clear(colornames.Navy)
 		p1view.Clear(color.RGBA{A: 0.0})
 		p1bg.Clear(colornames.Lightgreen)
+		p1bgOverlay.Clear(color.RGBA{A: 0.0})
 
 		avgVelocity = p1.carryall.avgVelocity.average()
 		percMax = (avgVelocity.Len() / 200.0)
@@ -193,8 +200,18 @@ func run() {
 		worldOffset = worldOffset.Moved(pixel.Vec{X: monW / 2.0, Y: monH / 2.0})
 		p1view.SetMatrix(worldOffset)
 		p1bg.SetMatrix(worldOffset)
+		//p1bgOverlay.SetMatrix(pixel.IM.Moved(pixel.Vec{X: monW / 2.0, Y: monH / 2.0}))
 
 		mainBackground.Draw(p1bg, -mapCanvas.Bounds().W(), mapCanvas.Bounds().W()*2)
+
+		starAlpha := ((p1.position.Y - 1600.0) / 1000.0)
+		if starAlpha > 1.0 {
+			starAlpha = 1.0
+		}
+		if starAlpha > 0 {
+			p1bgOverlay.SetColorMask(pixel.Alpha(starAlpha))
+			mainStarfield.Draw(p1bgOverlay)
+		}
 
 		mapCanvas.Draw(p1view, pixel.IM.Moved(pixel.Vec{
 			X: mapCanvas.Bounds().W() / 2.0,
@@ -215,6 +232,7 @@ func run() {
 			X: p1bg.Bounds().W() / 2,
 			Y: p1bg.Bounds().H() / 2,
 		}))
+		p1bgOverlay.Draw(win, pixel.IM.Moved(pixel.Vec{X: monW / 2.0, Y: monH / 2.0}))
 		p1view.Draw(win, pixel.IM.Moved(pixel.Vec{
 			X: p1view.Bounds().W() / 2,
 			Y: p1view.Bounds().H() / 2,

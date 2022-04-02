@@ -15,6 +15,7 @@ import (
 	"github.com/mateusz/carryall/piksele"
 	"gitlab.com/gomidi/midi"
 	"gitlab.com/gomidi/midi/midimessage/channel"
+	"gitlab.com/gomidi/midi/writer"
 )
 
 const SID_CHAN_ENGINE = "engine"
@@ -50,6 +51,9 @@ type Carryall struct {
 	destroyingStart     time.Time
 	destroyingAudioDone bool
 	accelerationStress  float64
+	engineSpinupStart   time.Time
+	engineSpinupDone    bool
+	stressLightOn       bool
 
 	// Input counters
 	leftPanTicks  int64
@@ -194,6 +198,9 @@ func (s *Carryall) Step(dt float64) {
 	factor := 0.02
 
 	if s.playIsHeld && s.engineSpinup < 1.0 {
+		if s.engineSpinupStart.Before(startTime) {
+			s.engineSpinupStart = time.Now()
+		}
 		s.engineSpinup += 0.25 * factor
 		if s.engineSpinup > 1.0 {
 			s.engineSpinup = 1.0
@@ -247,13 +254,15 @@ func (s *Carryall) Step(dt float64) {
 	s.velocity = s.velocity.Add(gravity)
 	s.position = s.position.Add(s.velocity.Scaled(factor))
 
+	s.accelerationStress = velocityBefore.Sub(s.velocity).Len()
 	if s.position.Y < 167.0 {
 		s.velocity = s.velocity.ScaledXY(s.bounceDampen)
 		s.position.Y = 167.0
 		s.bodyRotation = 0.0
+		// Leg springs dampen the impact ;-)
+		s.accelerationStress = velocityBefore.Sub(s.velocity).Len() / 15.0
 	}
 
-	s.accelerationStress = velocityBefore.Sub(s.velocity).Len()
 	if time.Since(startTime) > 3.0*time.Second && s.accelerationStress > 3.0 {
 		// crash
 		s.destroyingStart = time.Now()
@@ -299,6 +308,8 @@ func (s *Carryall) MidiInput(msgs []midi.Message) {
 				s.playIsHeld = true
 			}
 			if non.Channel() == engine.MIDI_CHAN_LEFT && non.Key() == engine.MIDI_KEY_SYNC {
+				s.engineSpinupStart = time.Now()
+				s.engineSpinupDone = false
 				s.engineSpinup = 0.9
 			}
 		}
@@ -344,6 +355,40 @@ func (s *Carryall) MidiInput(msgs []midi.Message) {
 
 		}
 	}
+}
+
+func (s *Carryall) MidiOutput(wr *writer.Writer) {
+	wr.SetChannel(engine.MIDI_CHAN_RIGHT)
+	if s.accelerationStress >= 2.0 && !s.stressLightOn {
+		s.stressLightOn = true
+		writer.NoteOn(wr, engine.MIDI_KEY_SYNC, 0x7F)
+	}
+	if s.accelerationStress < 2.0 && s.stressLightOn {
+		s.stressLightOn = false
+		writer.NoteOff(wr, engine.MIDI_KEY_SYNC)
+	}
+
+	wr.SetChannel(engine.MIDI_CHAN_LEFT)
+	if !s.engineSpinupDone && s.engineSpinupStart.After(startTime) {
+		spinupFrame := uint32(time.Since(s.engineSpinupStart) / (time.Millisecond * 250.0))
+		if s.engineSpinup == 1.0 {
+			s.engineSpinupStart = time.Time{}
+			s.engineSpinupDone = true
+			wr.SetChannel(engine.MIDI_CHAN_LEFT)
+			writer.NoteOn(wr, engine.MIDI_KEY_PLAY, 0x7F)
+		} else if !s.playIsHeld {
+			s.engineSpinupStart = time.Time{}
+			wr.SetChannel(engine.MIDI_CHAN_LEFT)
+			writer.NoteOff(wr, engine.MIDI_KEY_PLAY)
+		} else if spinupFrame%2 == 1 {
+			wr.SetChannel(engine.MIDI_CHAN_LEFT)
+			writer.NoteOn(wr, engine.MIDI_KEY_PLAY, 0x7F)
+		} else {
+			wr.SetChannel(engine.MIDI_CHAN_LEFT)
+			writer.NoteOff(wr, engine.MIDI_KEY_PLAY)
+		}
+	}
+
 }
 
 func (s *Carryall) GetChannels() map[string]*sid.Channel {

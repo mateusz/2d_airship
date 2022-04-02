@@ -12,11 +12,15 @@ import (
 
 	"github.com/faiface/beep/speaker"
 	"github.com/faiface/pixel"
+	"github.com/faiface/pixel/imdraw"
 	"github.com/faiface/pixel/pixelgl"
+	"github.com/faiface/pixel/text"
 	engine "github.com/mateusz/carryall/engine/entities"
 	"github.com/mateusz/carryall/engine/sid"
 	"github.com/mateusz/carryall/piksele"
+	"gitlab.com/gomidi/midi/writer"
 	"golang.org/x/image/colornames"
+	"golang.org/x/image/font/basicfont"
 )
 
 var (
@@ -85,6 +89,13 @@ func main() {
 	mc, err = newMidiController()
 	defer mc.close()
 
+	mc.writer.SetChannel(engine.MIDI_CHAN_LEFT)
+	writer.NoteOn(mc.writer, engine.MIDI_KEY_PLAY, 0x7F)
+	writer.NoteOff(mc.writer, engine.MIDI_KEY_PLAY)
+	mc.writer.SetChannel(engine.MIDI_CHAN_RIGHT)
+	writer.NoteOn(mc.writer, engine.MIDI_KEY_SYNC, 0x7F)
+	writer.NoteOff(mc.writer, engine.MIDI_KEY_SYNC)
+
 	mainBackground = newBackogrund(16.0, []stripe{
 		{pos: -20, colour: makeColourful(colornames.Black)},
 		{pos: 0, colour: makeColourful(colornames.Saddlebrown)},
@@ -142,6 +153,10 @@ func run() {
 	p1view := pixelgl.NewCanvas(pixel.R(0, 0, monW, monH))
 	p1bg := pixelgl.NewCanvas(pixel.R(0, 0, monW, monH))
 	p1bgOverlay := pixelgl.NewCanvas(pixel.R(0, 0, monW, monH))
+	p1hud := pixelgl.NewCanvas(pixel.R(0, 0, monW, monH))
+	staticHud := imdraw.New(nil)
+	staticHud.Color = colornames.Black
+	readings := text.New(pixel.ZV, text.NewAtlas(basicfont.Face7x13, text.ASCII))
 
 	prof, _ := os.Create("cpuprof.prof")
 	defer prof.Close()
@@ -170,6 +185,7 @@ func run() {
 
 		gameEntities.Input(win, cam1)
 		gameEntities.MidiInput(mc.queue)
+		gameEntities.MidiOutput(mc.writer)
 		gameEntities.Step(dt)
 
 		// Sound
@@ -180,6 +196,14 @@ func run() {
 		p1view.Clear(color.RGBA{A: 0.0})
 		p1bg.Clear(colornames.Lightgreen)
 		p1bgOverlay.Clear(color.RGBA{A: 0.0})
+		p1hud.Clear(color.RGBA{A: 0.0})
+
+		readings.Clear()
+		fmt.Fprintf(readings, "V=%.0fkm/h\na=%.1fg", p1.carryall.velocity.Len(), p1.carryall.accelerationStress*2.5)
+		readings.Draw(p1hud, pixel.IM.Moved(pixel.Vec{
+			X: 10.0,
+			Y: 20.0,
+		}))
 
 		avgVelocity = p1.carryall.avgVelocity.average()
 		percMax = (avgVelocity.Len() / 200.0)
@@ -228,6 +252,12 @@ func run() {
 			X: p1view.Bounds().W() / 2,
 			Y: p1view.Bounds().H() / 2,
 		}))
+
+		p1hud.Draw(win, pixel.IM.Moved(pixel.Vec{
+			X: p1view.Bounds().W() / 2,
+			Y: p1view.Bounds().H() / 2,
+		}))
+
 		win.Update()
 	}
 

@@ -67,6 +67,11 @@ func main() {
 		os.Exit(2)
 	}
 
+	audioSamples = make(map[int32]audioSample)
+	audioSamples[MP3_EXPLOSION] = newSampleMp3("explosion")
+	audioSamples[MP3_SUBMARINE_BREAKING] = newSampleMp3("submarine_breaking")
+	speaker.Init(44100, 8)
+
 	gameEntities = engine.NewEntities()
 	carryall := NewCarryall(&mobSprites, &mobSprites32)
 	carryall.position = pixel.Vec{X: 768.0, Y: 168.0}
@@ -99,10 +104,6 @@ func main() {
 	audio = sid.New(chmap)
 	carryall.SetupChannels(audio)
 	audio.Start(44100.0)
-
-	audioSamples = make(map[int32]audioSample)
-	audioSamples[MP3_EXPLOSION] = newSampleMp3("explosion")
-	speaker.Init(44100, 8)
 
 	pixelgl.Run(run)
 }

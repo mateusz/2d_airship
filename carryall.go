@@ -5,6 +5,8 @@ import (
 	"math"
 	"time"
 
+	"github.com/faiface/beep"
+	"github.com/faiface/beep/effects"
 	"github.com/faiface/beep/speaker"
 	"github.com/faiface/pixel"
 	"github.com/faiface/pixel/pixelgl"
@@ -33,7 +35,9 @@ type Carryall struct {
 	bounceDampen             pixel.Vec
 
 	// Audio
-	engineSound *sid.Vibrato
+	engineSound  *sid.Vibrato
+	creakingCtrl *beep.Ctrl
+	creakingVol  *effects.Volume
 
 	// State
 	engineSpinup        float64
@@ -45,6 +49,7 @@ type Carryall struct {
 	avgVelocity         *movingAverage
 	destroyingStart     time.Time
 	destroyingAudioDone bool
+	accelerationStress  float64
 
 	// Input counters
 	leftPanTicks  int64
@@ -63,6 +68,16 @@ type Carryall struct {
 }
 
 func NewCarryall(mobSprites, mobSprites32 *piksele.Spriteset) Carryall {
+
+	creakingCtrl := &beep.Ctrl{Streamer: beep.Loop(-1, audioSamples[MP3_SUBMARINE_BREAKING].streamer), Paused: true}
+	creakingVol := &effects.Volume{
+		Streamer: creakingCtrl,
+		Base:     2,
+		Volume:   0,
+		Silent:   false,
+	}
+	speaker.Play(creakingVol)
+
 	return Carryall{
 		bodyRotationLimit:   math.Pi / 1.5,
 		bodyRotationSpeed:   1.0 / 4.0,
@@ -101,6 +116,9 @@ func NewCarryall(mobSprites, mobSprites32 *piksele.Spriteset) Carryall {
 			Spriteset: mobSprites,
 			SpriteID:  SPR_16_EXPLOSION_START,
 		},
+
+		creakingCtrl: creakingCtrl,
+		creakingVol:  creakingVol,
 	}
 }
 
@@ -221,6 +239,8 @@ func (s *Carryall) Step(dt float64) {
 	}
 	s.currentDrag = s.velocity.Scaled(-s.drag).Scaled(atmoPressure)
 
+	velocityBefore := s.velocity
+
 	s.velocity = s.velocity.Add(s.currentDrag)
 	s.velocity = s.velocity.Add(dvBody)
 	s.velocity = s.velocity.Add(dvJet)
@@ -228,17 +248,15 @@ func (s *Carryall) Step(dt float64) {
 	s.position = s.position.Add(s.velocity.Scaled(factor))
 
 	if s.position.Y < 167.0 {
-		velocityBefore := s.velocity
 		s.velocity = s.velocity.ScaledXY(s.bounceDampen)
 		s.position.Y = 167.0
 		s.bodyRotation = 0.0
+	}
 
-		impactStrength := velocityBefore.Sub(s.velocity).Len()
-		if impactStrength > 100.0 {
-
-			// crash
-			s.destroyingStart = time.Now()
-		}
+	s.accelerationStress = velocityBefore.Sub(s.velocity).Len()
+	if time.Since(startTime) > 3.0*time.Second && s.accelerationStress > 3.0 {
+		// crash
+		s.destroyingStart = time.Now()
 	}
 
 	if s.velocity.Len() < 100.0 {
@@ -348,6 +366,7 @@ func (s *Carryall) MakeNoise(onto *sid.Sid) {
 		return
 	}
 	if s.destroyingStart.After(startTime) {
+		s.creakingCtrl.Paused = true
 		onto.SetVolume(SID_CHAN_ENGINE, 0.0)
 		onto.SetVolume(SID_CHAN_ENGINE_WHOOSH, 0.0)
 		speaker.Play(audioSamples[MP3_EXPLOSION].streamer)
@@ -357,6 +376,17 @@ func (s *Carryall) MakeNoise(onto *sid.Sid) {
 	}
 	if s.engineSpinup < 0.05 {
 		onto.SetVolume(SID_CHAN_ENGINE, 0.0)
+	}
+
+	if s.accelerationStress > 2.0 {
+		stressLevel := (s.accelerationStress - 2.0) / 2.0
+		if stressLevel > 2.0 {
+			stressLevel = 1.0
+		}
+		s.creakingCtrl.Paused = false
+		s.creakingVol.Volume = 0.1 * (stressLevel * 20.0)
+	} else {
+		s.creakingCtrl.Paused = true
 	}
 
 	// Map to [0.0 - 1.0]

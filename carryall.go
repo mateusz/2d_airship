@@ -36,6 +36,7 @@ type Carryall struct {
 	engineSound *sid.Vibrato
 
 	// State
+	engineSpinup        float64
 	position            pixel.Vec
 	bodyRotation        float64
 	engineRotation      float64
@@ -51,6 +52,7 @@ type Carryall struct {
 	rightPanTicks int64
 	rightBalVal   float64 // Absolute value [0.0,1.0]
 	middleBalVal  float64 // Absolute value [0.0,1.0]
+	playIsHeld    bool
 
 	// Sprites
 	body         *piksele.Sprite
@@ -62,7 +64,7 @@ type Carryall struct {
 
 func NewCarryall(mobSprites, mobSprites32 *piksele.Spriteset) Carryall {
 	return Carryall{
-		bodyRotationLimit:   math.Pi / 4.0,
+		bodyRotationLimit:   math.Pi / 1.5,
 		bodyRotationSpeed:   1.0 / 4.0,
 		stabilityPower:      1.0,
 		engineRotationLimit: math.Pi / 4.0,
@@ -173,6 +175,16 @@ func (s *Carryall) Step(dt float64) {
 
 	factor := 0.02
 
+	if s.playIsHeld && s.engineSpinup < 1.0 {
+		s.engineSpinup += 0.25 * factor
+		if s.engineSpinup > 1.0 {
+			s.engineSpinup = 1.0
+		}
+	}
+	if !s.playIsHeld && s.engineSpinup > 0.0 && s.engineSpinup < 1.0 {
+		s.engineSpinup -= 0.15 * factor
+	}
+
 	s.bodyRotation += -factor * 3.14 * float64(s.leftPanTicks) * s.bodyRotationSpeed
 	if s.bodyRotation < -s.bodyRotationLimit {
 		s.bodyRotation = -s.bodyRotationLimit
@@ -192,8 +204,8 @@ func (s *Carryall) Step(dt float64) {
 		s.engineRotation = jetRangeMax
 	}
 
-	s.currentStabilityPower = s.leftBalVal * (s.stabilityPower * (1.0 - s.middleBalVal))
-	s.currentEnginePower = (s.rightBalVal - 0.5) * 2.0 * (s.enginePower * s.middleBalVal)
+	s.currentStabilityPower = s.leftBalVal * (s.stabilityPower * (1.0 - s.middleBalVal)) * s.engineSpinup
+	s.currentEnginePower = (s.rightBalVal - 0.5) * 2.0 * (s.enginePower * s.middleBalVal) * s.engineSpinup
 
 	// [0.0, 1.0], this is just for hovering, can't reverse
 	dvBody := pixel.Vec{X: 0, Y: s.currentStabilityPower}.Rotated(s.bodyRotation)
@@ -263,6 +275,22 @@ func (s *Carryall) MidiInput(msgs []midi.Message) {
 	s.leftPanTicks = 0
 	s.rightPanTicks = 0
 	for _, m := range msgs {
+		non, ok := m.(channel.NoteOn)
+		if ok {
+			if non.Channel() == engine.MIDI_CHAN_LEFT && non.Key() == engine.MIDI_KEY_PLAY {
+				s.playIsHeld = true
+			}
+			if non.Channel() == engine.MIDI_CHAN_LEFT && non.Key() == engine.MIDI_KEY_SYNC {
+				s.engineSpinup = 0.9
+			}
+		}
+		noff, ok := m.(channel.NoteOff)
+		if ok {
+			if noff.Channel() == engine.MIDI_CHAN_LEFT && noff.Key() == engine.MIDI_KEY_PLAY {
+				s.playIsHeld = false
+			}
+		}
+
 		cc, ok := m.(channel.ControlChange)
 		if ok {
 			if cc.Channel() == engine.MIDI_CHAN_LEFT && (cc.Controller() == engine.MIDI_CTRL_RIM || cc.Controller() == engine.MIDI_CTRL_PAN) {
@@ -295,6 +323,7 @@ func (s *Carryall) MidiInput(msgs []midi.Message) {
 				// Scaled to 0.0-1.0
 				s.middleBalVal = float64(cc.Value()) / 127
 			}
+
 		}
 	}
 }
@@ -326,6 +355,9 @@ func (s *Carryall) MakeNoise(onto *sid.Sid) {
 		s.destroyingAudioDone = true
 		return
 	}
+	if s.engineSpinup < 0.05 {
+		onto.SetVolume(SID_CHAN_ENGINE, 0.0)
+	}
 
 	// Map to [0.0 - 1.0]
 	whooshVol := s.currentDrag.Len()
@@ -337,6 +369,15 @@ func (s *Carryall) MakeNoise(onto *sid.Sid) {
 	// Map controls to [0.0 - 1.0]
 	maxPower := p1.carryall.stabilityPower + p1.carryall.enginePower
 	totalThrottle := (p1.carryall.currentStabilityPower + math.Abs(p1.carryall.currentEnginePower)) / maxPower
-	s.engineSound.SetFreq(math.Sqrt(p1.carryall.velocity.Len()) + 10.0)
-	onto.SetVolume(SID_CHAN_ENGINE, totalThrottle*0.75+0.25)
+	s.engineSound.SetFreq(math.Sqrt(p1.carryall.velocity.Len()) + s.engineSpinup*10.0)
+
+	if s.playIsHeld {
+		v := totalThrottle*0.75 + 1.0
+		if v > 1.0 {
+			v = 1.0
+		}
+		onto.SetVolume(SID_CHAN_ENGINE, v)
+	} else {
+		onto.SetVolume(SID_CHAN_ENGINE, totalThrottle*0.75+0.25)
+	}
 }

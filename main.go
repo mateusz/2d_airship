@@ -74,6 +74,8 @@ func main() {
 	audioSamples = make(map[int32]audioSample)
 	audioSamples[MP3_EXPLOSION] = newSampleMp3("explosion")
 	audioSamples[MP3_SUBMARINE_BREAKING] = newSampleMp3("submarine_breaking")
+	audioSamples[MP3_GROUND_ALERT] = newSampleMp3("ground_alert")
+	audioSamples[MP3_STRESS_ALERT] = newSampleMp3("stress_alert2")
 	speaker.Init(44100, 8)
 
 	gameEntities = engine.NewEntities()
@@ -103,8 +105,8 @@ func main() {
 		{pos: 10, colour: makeColourful(colornames.Green)},
 		{pos: 30, colour: makeColourful(colornames.Pink)},
 		{pos: 70, colour: makeColourful(color.RGBA{R: 170, G: 52, B: 195, A: 255})},
-		{pos: 110, colour: makeColourful(color.RGBA{R: 7, G: 15, B: 78, A: 255})},
-		{pos: 200, colour: makeColourful(colornames.Black)},
+		{pos: 140, colour: makeColourful(color.RGBA{R: 7, G: 15, B: 78, A: 255})},
+		{pos: 210, colour: makeColourful(colornames.Black)},
 	})
 
 	chmap := make(map[string]*sid.Channel)
@@ -199,10 +201,10 @@ func run() {
 		p1hud.Clear(color.RGBA{A: 0.0})
 
 		readings.Clear()
-		fmt.Fprintf(readings, "V=%.0fkm/h\na=%.1fg", p1.carryall.velocity.Len(), p1.carryall.accelerationStress*2.5)
+		fmt.Fprintf(readings, "h=%.0fm\n%.0fkm/h\n%.1fg\n%.2fatm", p1.position.Y, p1.carryall.velocity.Len(), p1.carryall.accelerationStress, p1.carryall.atmoPressure)
 		readings.Draw(p1hud, pixel.IM.Moved(pixel.Vec{
 			X: 10.0,
-			Y: 20.0,
+			Y: 45.0,
 		}))
 
 		avgVelocity = p1.carryall.avgVelocity.average()
@@ -219,7 +221,7 @@ func run() {
 
 		mainBackground.Draw(p1bg, -mapCanvas.Bounds().W(), mapCanvas.Bounds().W()*2)
 
-		starAlpha := ((p1.position.Y - 1600.0) / 1000.0)
+		starAlpha := ((p1.position.Y - 1000.0) / 2000.0)
 		if starAlpha > 1.0 {
 			starAlpha = 1.0
 		}

@@ -39,6 +39,8 @@ type Carryall struct {
 	engineSound  *sid.Vibrato
 	creakingCtrl *beep.Ctrl
 	creakingVol  *effects.Volume
+	groundAlert  *beep.Ctrl
+	stressAlert  *beep.Ctrl
 
 	// State
 	engineSpinup        float64
@@ -54,6 +56,7 @@ type Carryall struct {
 	engineSpinupStart   time.Time
 	engineSpinupDone    bool
 	stressLightOn       bool
+	atmoPressure        float64
 
 	// Input counters
 	leftPanTicks  int64
@@ -82,7 +85,7 @@ func NewCarryall(mobSprites, mobSprites32 *piksele.Spriteset) Carryall {
 	}
 	speaker.Play(creakingVol)
 
-	return Carryall{
+	c := Carryall{
 		bodyRotationLimit:   math.Pi / 1.5,
 		bodyRotationSpeed:   1.0 / 4.0,
 		stabilityPower:      1.0,
@@ -123,7 +126,14 @@ func NewCarryall(mobSprites, mobSprites32 *piksele.Spriteset) Carryall {
 
 		creakingCtrl: creakingCtrl,
 		creakingVol:  creakingVol,
+		groundAlert:  &beep.Ctrl{Streamer: beep.Loop(-1, audioSamples[MP3_GROUND_ALERT].streamer), Paused: true},
+		stressAlert:  &beep.Ctrl{Streamer: beep.Loop(-1, audioSamples[MP3_STRESS_ALERT].streamer), Paused: true},
 	}
+
+	speaker.Play(c.groundAlert)
+	speaker.Play(c.stressAlert)
+
+	return c
 }
 
 func (s Carryall) Draw(onto pixel.Target) {
@@ -237,14 +247,14 @@ func (s *Carryall) Step(dt float64) {
 	// Shifted to [-0.5, 0.5], jets can go backwards. Also increase power - main jet is super-powerful.
 	dvJet := pixel.Vec{X: 0, Y: s.currentEnginePower}.Rotated(s.bodyRotation).Rotated(s.engineRotation)
 
-	atmoPressure := 1.0 - (s.position.Y-1600.0)/1000.0
-	if atmoPressure > 1.0 {
-		atmoPressure = 1.0
+	s.atmoPressure = 1.0 - (s.position.Y-1000.0)/2000.0
+	if s.atmoPressure > 1.0 {
+		s.atmoPressure = 1.0
 	}
-	if atmoPressure < 0.0 {
-		atmoPressure = 0.0
+	if s.atmoPressure < 0.0 {
+		s.atmoPressure = 0.0
 	}
-	s.currentDrag = s.velocity.Scaled(-s.drag).Scaled(atmoPressure)
+	s.currentDrag = s.velocity.Scaled(-s.drag).Scaled(s.atmoPressure)
 
 	velocityBefore := s.velocity
 
@@ -255,15 +265,20 @@ func (s *Carryall) Step(dt float64) {
 	s.position = s.position.Add(s.velocity.Scaled(factor))
 
 	s.accelerationStress = velocityBefore.Sub(s.velocity).Len()
+
 	if s.position.Y < 167.0 {
-		s.velocity = s.velocity.ScaledXY(s.bounceDampen)
-		s.position.Y = 167.0
-		s.bodyRotation = 0.0
-		// Leg springs dampen the impact ;-)
-		s.accelerationStress = velocityBefore.Sub(s.velocity).Len() / 15.0
+		if math.Abs(s.bodyRotation) > (math.Pi / 8.0) {
+			s.destroyingStart = time.Now()
+		} else {
+			s.velocity = s.velocity.ScaledXY(s.bounceDampen)
+			s.position.Y = 167.0
+			s.bodyRotation = 0.0
+			// Leg springs dampen the impact ;-)
+			s.accelerationStress = velocityBefore.Sub(s.velocity).Len() / 15.0
+		}
 	}
 
-	if time.Since(startTime) > 3.0*time.Second && s.accelerationStress > 3.0 {
+	if time.Since(startTime) > 3.0*time.Second && s.accelerationStress > 3.8 {
 		// crash
 		s.destroyingStart = time.Now()
 	}
@@ -359,11 +374,11 @@ func (s *Carryall) MidiInput(msgs []midi.Message) {
 
 func (s *Carryall) MidiOutput(wr *writer.Writer) {
 	wr.SetChannel(engine.MIDI_CHAN_RIGHT)
-	if s.accelerationStress >= 2.0 && !s.stressLightOn {
+	if s.accelerationStress >= 2.8 && !s.stressLightOn {
 		s.stressLightOn = true
 		writer.NoteOn(wr, engine.MIDI_KEY_SYNC, 0x7F)
 	}
-	if s.accelerationStress < 2.0 && s.stressLightOn {
+	if s.accelerationStress < 2.8 && s.stressLightOn {
 		s.stressLightOn = false
 		writer.NoteOff(wr, engine.MIDI_KEY_SYNC)
 	}
@@ -411,6 +426,8 @@ func (s *Carryall) MakeNoise(onto *sid.Sid) {
 		return
 	}
 	if s.destroyingStart.After(startTime) {
+		s.stressAlert.Paused = true
+		s.groundAlert.Paused = true
 		s.creakingCtrl.Paused = true
 		onto.SetVolume(SID_CHAN_ENGINE, 0.0)
 		onto.SetVolume(SID_CHAN_ENGINE_WHOOSH, 0.0)
@@ -423,13 +440,25 @@ func (s *Carryall) MakeNoise(onto *sid.Sid) {
 		onto.SetVolume(SID_CHAN_ENGINE, 0.0)
 	}
 
-	if s.accelerationStress > 2.0 {
-		stressLevel := (s.accelerationStress - 2.0) / 2.0
-		if stressLevel > 2.0 {
+	if s.accelerationStress > 2.8 {
+		s.stressAlert.Paused = false
+	} else {
+		s.stressAlert.Paused = true
+	}
+
+	if s.position.Add(s.velocity.Scaled(5.0)).Y < 167.0 && s.velocity.Len() > 30.0 {
+		s.groundAlert.Paused = false
+	} else {
+		s.groundAlert.Paused = true
+	}
+
+	if s.accelerationStress > 1.0 {
+		stressLevel := (s.accelerationStress - 1.0) / 2.8
+		if stressLevel > 1.0 {
 			stressLevel = 1.0
 		}
 		s.creakingCtrl.Paused = false
-		s.creakingVol.Volume = 0.1 * (stressLevel * 20.0)
+		s.creakingVol.Volume = stressLevel*2.0 - 1.0
 	} else {
 		s.creakingCtrl.Paused = true
 	}

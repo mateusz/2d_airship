@@ -146,6 +146,35 @@ func run() {
 	mapCanvas := pixelgl.NewCanvas(pixel.R(0, 0, float64(gameWorld.PixelWidth()), float64(gameWorld.PixelHeight())))
 	gameWorld.Draw(mapCanvas)
 
+	cloudCanvasUnder := pixelgl.NewCanvas(pixel.R(0, 0, float64(gameWorld.PixelWidth()), 1500.0))
+	cloudCanvasOver := pixelgl.NewCanvas(pixel.R(0, 0, float64(gameWorld.PixelWidth()), 1500.0))
+	var i uint16
+	strata := map[float64]uint16{
+		320.0: 25,
+		520.0: 25,
+		720.0: 50,
+		920.0: 50,
+		1120:  25,
+		1320:  10,
+	}
+	for s, c := range strata {
+		for i = 0; i < c; i++ {
+			var canv *pixelgl.Canvas
+			if rand.Intn(2) == 0 {
+				canv = cloudCanvasUnder
+			} else {
+				canv = cloudCanvasOver
+			}
+			canv.SetColorMask(pixel.Alpha(0.4 + rand.Float64()*0.4))
+			mobSprites32.Sprites[SPR_32_CLOUD1+uint32(rand.Intn(2))].Draw(
+				canv,
+				pixel.IM.Scaled(pixel.V(0.0, 0.0), 1.0+math.Sqrt(rand.Float64()*3.0)).Moved(
+					pixel.V(50.0+rand.Float64()*(canv.Bounds().W()-100.0), s+rand.Float64()*200.0),
+				),
+			)
+		}
+	}
+
 	last := time.Now()
 	var avgVelocity pixel.Vec
 	var percMax, zoom float64
@@ -242,8 +271,33 @@ func run() {
 			X: mapCanvas.Bounds().W()/2.0 - mapCanvas.Bounds().W(),
 			Y: mapCanvas.Bounds().H() / 2.0,
 		}))
+		cloudCanvasUnder.Draw(p1view, pixel.IM.Moved(pixel.Vec{
+			X: cloudCanvasUnder.Bounds().W() / 2.0,
+			Y: cloudCanvasUnder.Bounds().H() / 2.0,
+		}))
+		cloudCanvasUnder.Draw(p1view, pixel.IM.Moved(pixel.Vec{
+			X: cloudCanvasUnder.Bounds().W()/2.0 + cloudCanvasUnder.Bounds().W(),
+			Y: cloudCanvasUnder.Bounds().H() / 2.0,
+		}))
+		cloudCanvasUnder.Draw(p1view, pixel.IM.Moved(pixel.Vec{
+			X: cloudCanvasUnder.Bounds().W()/2.0 - cloudCanvasUnder.Bounds().W(),
+			Y: cloudCanvasUnder.Bounds().H() / 2.0,
+		}))
 
 		gameEntities.ByZ().Draw(p1view)
+
+		cloudCanvasOver.Draw(p1view, pixel.IM.Moved(pixel.Vec{
+			X: cloudCanvasUnder.Bounds().W() / 2.0,
+			Y: cloudCanvasUnder.Bounds().H() / 2.0,
+		}))
+		cloudCanvasOver.Draw(p1view, pixel.IM.Moved(pixel.Vec{
+			X: cloudCanvasUnder.Bounds().W()/2.0 + cloudCanvasUnder.Bounds().W(),
+			Y: cloudCanvasUnder.Bounds().H() / 2.0,
+		}))
+		cloudCanvasOver.Draw(p1view, pixel.IM.Moved(pixel.Vec{
+			X: cloudCanvasUnder.Bounds().W()/2.0 - cloudCanvasUnder.Bounds().W(),
+			Y: cloudCanvasUnder.Bounds().H() / 2.0,
+		}))
 
 		p1bg.Draw(win, pixel.IM.Moved(pixel.Vec{
 			X: p1bg.Bounds().W() / 2,

@@ -6,6 +6,8 @@ const (
 	SPR_32_CARRYALL      = 0
 	SPR_32_STABILITY_JET = 1
 	SPR_32_ENGINE_JET    = 3
+	SPR_32_CLOUD1        = 6
+	SPR_32_CLOUD2        = 7
 
 	SPR_16_ENGINE          = 0
 	SPR_16_EXPLOSION_START = 1

@@ -73,7 +73,7 @@ func main() {
 
 	audioSamples = make(map[int32]audioSample)
 	audioSamples[MP3_EXPLOSION] = newSampleMp3("explosion")
-	audioSamples[MP3_SUBMARINE_BREAKING] = newSampleMp3("submarine_breaking")
+	audioSamples[MP3_SUBMARINE_BREAKING] = newSampleMp3("submarine_breaking2")
 	audioSamples[MP3_GROUND_ALERT] = newSampleMp3("ground_alert")
 	audioSamples[MP3_STRESS_ALERT] = newSampleMp3("stress_alert2")
 	speaker.Init(44100, 8)

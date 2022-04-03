@@ -458,7 +458,7 @@ func (s *Carryall) MakeNoise(onto *sid.Sid) {
 			stressLevel = 1.0
 		}
 		s.creakingCtrl.Paused = false
-		s.creakingVol.Volume = stressLevel*2.0 - 1.0
+		s.creakingVol.Volume = stressLevel*3.0 - 1.0
 	} else {
 		s.creakingCtrl.Paused = true
 	}

@@ -239,14 +239,6 @@ func (s *Carryall) Step(dt float64) {
 		s.engineRotation = jetRangeMax
 	}
 
-	s.currentStabilityPower = s.leftBalVal * (s.stabilityPower * (1.0 - s.middleBalVal)) * s.engineSpinup
-	s.currentEnginePower = (s.rightBalVal - 0.5) * 2.0 * (s.enginePower * s.middleBalVal) * s.engineSpinup
-
-	// [0.0, 1.0], this is just for hovering, can't reverse
-	dvBody := pixel.Vec{X: 0, Y: s.currentStabilityPower}.Rotated(s.bodyRotation)
-	// Shifted to [-0.5, 0.5], jets can go backwards. Also increase power - main jet is super-powerful.
-	dvJet := pixel.Vec{X: 0, Y: s.currentEnginePower}.Rotated(s.bodyRotation).Rotated(s.engineRotation)
-
 	s.atmoPressure = 1.0 - (s.position.Y-1000.0)/2000.0
 	if s.atmoPressure > 1.0 {
 		s.atmoPressure = 1.0
@@ -254,6 +246,15 @@ func (s *Carryall) Step(dt float64) {
 	if s.atmoPressure < 0.0 {
 		s.atmoPressure = 0.0
 	}
+
+	s.currentStabilityPower = s.leftBalVal * (s.stabilityPower * (1.0 - s.middleBalVal)) * s.engineSpinup * s.atmoPressure
+	s.currentEnginePower = (s.rightBalVal - 0.5) * 2.0 * (s.enginePower * s.middleBalVal) * s.engineSpinup * s.atmoPressure
+
+	// [0.0, 1.0], this is just for hovering, can't reverse
+	dvBody := pixel.Vec{X: 0, Y: s.currentStabilityPower}.Rotated(s.bodyRotation)
+	// Shifted to [-0.5, 0.5], jets can go backwards. Also increase power - main jet is super-powerful.
+	dvJet := pixel.Vec{X: 0, Y: s.currentEnginePower}.Rotated(s.bodyRotation).Rotated(s.engineRotation)
+
 	s.currentDrag = s.velocity.Scaled(-s.drag).Scaled(s.atmoPressure)
 
 	velocityBefore := s.velocity
@@ -446,7 +447,7 @@ func (s *Carryall) MakeNoise(onto *sid.Sid) {
 		s.stressAlert.Paused = true
 	}
 
-	if s.position.Add(s.velocity.Scaled(5.0)).Y < 167.0 && s.velocity.Len() > 30.0 {
+	if s.position.Add(s.velocity.Scaled(3.0)).Y < 167.0 && s.velocity.Len() > 30.0 {
 		s.groundAlert.Paused = false
 	} else {
 		s.groundAlert.Paused = true

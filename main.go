@@ -97,6 +97,9 @@ func main() {
 	mc.writer.SetChannel(engine.MIDI_CHAN_RIGHT)
 	writer.NoteOn(mc.writer, engine.MIDI_KEY_SYNC, 0x7F)
 	writer.NoteOff(mc.writer, engine.MIDI_KEY_SYNC)
+	mc.writer.SetChannel(engine.MIDI_CHAN_MIDDLE)
+	writer.NoteOn(mc.writer, engine.MIDI_KEY_LED_SHOW, 0x7F)
+	writer.NoteOff(mc.writer, engine.MIDI_KEY_LED_SHOW)
 
 	mainBackground = newBackogrund(16.0, []stripe{
 		{pos: -20, colour: makeColourful(colornames.Black)},

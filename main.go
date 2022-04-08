@@ -119,6 +119,7 @@ func main() {
 
 	audio = sid.New(chmap)
 	carryall.SetupChannels(audio)
+
 	audio.Start(44100.0)
 
 	pixelgl.Run(run)
@@ -149,8 +150,8 @@ func run() {
 	mapCanvas := pixelgl.NewCanvas(pixel.R(0, 0, float64(gameWorld.PixelWidth()), float64(gameWorld.PixelHeight())))
 	gameWorld.Draw(mapCanvas)
 
-	cloudCanvasUnder := pixelgl.NewCanvas(pixel.R(0, 0, float64(gameWorld.PixelWidth()), 1500.0))
-	cloudCanvasOver := pixelgl.NewCanvas(pixel.R(0, 0, float64(gameWorld.PixelWidth()), 1500.0))
+	cloudCanvasUnder := pixelgl.NewCanvas(pixel.R(0, 0, float64(gameWorld.PixelWidth()), 1800.0))
+	cloudCanvasOver := pixelgl.NewCanvas(pixel.R(0, 0, float64(gameWorld.PixelWidth()), 1800.0))
 	var i uint16
 	strata := map[float64]uint16{
 		320.0: 25,

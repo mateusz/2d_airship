@@ -41,6 +41,18 @@ func (s *Sid) SetVolume(chname string, volume float64) {
 	s.mu.Unlock()
 }
 
+func (s *Sid) Pause(chname string, volume float64) {
+	s.mu.Lock()
+	s.channels[chname].paused = true
+	s.mu.Unlock()
+}
+
+func (s *Sid) Resume(chname string, volume float64) {
+	s.mu.Lock()
+	s.channels[chname].paused = false
+	s.mu.Unlock()
+}
+
 func (s *Sid) Start(sampleRate float64) {
 	portaudio.Initialize()
 
@@ -51,7 +63,9 @@ func (s *Sid) Start(sampleRate float64) {
 			out[o] = 0.0
 
 			for _, ch := range s.channels {
-				out[o] += float32(ch.src.Gen(ch.volume, sampleRate))
+				if !ch.paused {
+					out[o] += float32(ch.src.Gen(ch.volume, sampleRate))
+				}
 			}
 
 			if out[o] > 1.0 {

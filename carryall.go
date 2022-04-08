@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/faiface/beep"
-	"github.com/faiface/beep/effects"
 	"github.com/faiface/beep/speaker"
 	"github.com/faiface/pixel"
 	"github.com/faiface/pixel/pixelgl"
@@ -20,6 +19,9 @@ import (
 
 const SID_CHAN_ENGINE = "engine"
 const SID_CHAN_ENGINE_WHOOSH = "engineWhoosh"
+const SID_CHAN_CREAKING = "creaking"
+const SID_CHAN_GROUND_ALERT = "groundAlert"
+const SID_CHAN_STRESS_ALERT = "stressAlert"
 
 type Carryall struct {
 	// Various physics settings
@@ -36,11 +38,10 @@ type Carryall struct {
 	bounceDampen             pixel.Vec
 
 	// Audio
-	engineSound  *sid.Vibrato
-	creakingCtrl *beep.Ctrl
-	creakingVol  *effects.Volume
-	groundAlert  *beep.Ctrl
-	stressAlert  *beep.Ctrl
+	engineSound   *sid.Vibrato
+	creakingSound *sid.Mp3
+	groundAlert   *beep.Ctrl
+	stressAlert   *beep.Ctrl
 
 	// State
 	engineSpinup        float64
@@ -75,16 +76,6 @@ type Carryall struct {
 }
 
 func NewCarryall(mobSprites, mobSprites32 *piksele.Spriteset) Carryall {
-
-	creakingCtrl := &beep.Ctrl{Streamer: beep.Loop(-1, audioSamples[MP3_SUBMARINE_BREAKING].streamer), Paused: true}
-	creakingVol := &effects.Volume{
-		Streamer: creakingCtrl,
-		Base:     2,
-		Volume:   0,
-		Silent:   false,
-	}
-	speaker.Play(creakingVol)
-
 	c := Carryall{
 		bodyRotationLimit:   math.Pi / 1.5,
 		bodyRotationSpeed:   1.0 / 4.0,
@@ -124,10 +115,8 @@ func NewCarryall(mobSprites, mobSprites32 *piksele.Spriteset) Carryall {
 			SpriteID:  SPR_16_EXPLOSION_START,
 		},
 
-		creakingCtrl: creakingCtrl,
-		creakingVol:  creakingVol,
-		groundAlert:  &beep.Ctrl{Streamer: beep.Loop(-1, audioSamples[MP3_GROUND_ALERT].streamer), Paused: true},
-		stressAlert:  &beep.Ctrl{Streamer: beep.Loop(-1, audioSamples[MP3_STRESS_ALERT].streamer), Paused: true},
+		groundAlert: &beep.Ctrl{Streamer: beep.Loop(-1, audioSamples[MP3_GROUND_ALERT].streamer), Paused: true},
+		stressAlert: &beep.Ctrl{Streamer: beep.Loop(-1, audioSamples[MP3_STRESS_ALERT].streamer), Paused: true},
 	}
 
 	speaker.Play(c.groundAlert)
@@ -411,6 +400,9 @@ func (s *Carryall) GetChannels() map[string]*sid.Channel {
 	return map[string]*sid.Channel{
 		SID_CHAN_ENGINE:        sid.NewChannel(0.5),
 		SID_CHAN_ENGINE_WHOOSH: sid.NewChannel(0.1),
+		SID_CHAN_CREAKING:      sid.NewChannel(0.0),
+		SID_CHAN_GROUND_ALERT:  sid.NewChannel(0.0),
+		SID_CHAN_STRESS_ALERT:  sid.NewChannel(0.0),
 	}
 }
 
@@ -418,8 +410,11 @@ func (s *Carryall) SetupChannels(onto *sid.Sid) {
 	s.engineSound = sid.NewVibrato(20.0, 1.02, 1.05)
 	onto.SetSource(SID_CHAN_ENGINE, s.engineSound)
 
-	onto.SetSource(SID_CHAN_ENGINE_WHOOSH, sid.NewPinkNoise(5))
+	onto.SetSource(SID_CHAN_GROUND_ALERT, sid.NewMp3("assets/stress_alert2.mp3", true))
+	onto.SetSource(SID_CHAN_STRESS_ALERT, sid.NewMp3("assets/ground_alert.mp3", true))
 
+	onto.SetSource(SID_CHAN_ENGINE_WHOOSH, sid.NewPinkNoise(5))
+	onto.SetSource(SID_CHAN_CREAKING, sid.NewMp3("assets/submarine_breaking2.mp3", true))
 }
 
 func (s *Carryall) MakeNoise(onto *sid.Sid) {
@@ -429,7 +424,7 @@ func (s *Carryall) MakeNoise(onto *sid.Sid) {
 	if s.destroyingStart.After(startTime) {
 		s.stressAlert.Paused = true
 		s.groundAlert.Paused = true
-		s.creakingCtrl.Paused = true
+		onto.SetVolume(SID_CHAN_CREAKING, 0.0)
 		onto.SetVolume(SID_CHAN_ENGINE, 0.0)
 		onto.SetVolume(SID_CHAN_ENGINE_WHOOSH, 0.0)
 		speaker.Play(audioSamples[MP3_EXPLOSION].streamer)
@@ -458,10 +453,9 @@ func (s *Carryall) MakeNoise(onto *sid.Sid) {
 		if stressLevel > 1.0 {
 			stressLevel = 1.0
 		}
-		s.creakingCtrl.Paused = false
-		s.creakingVol.Volume = stressLevel*3.0 - 1.0
+		onto.SetVolume(SID_CHAN_CREAKING, math.Sqrt(stressLevel))
 	} else {
-		s.creakingCtrl.Paused = true
+		onto.SetVolume(SID_CHAN_CREAKING, 0.0)
 	}
 
 	// Map to [0.0 - 1.0]

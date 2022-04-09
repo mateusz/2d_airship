@@ -2,6 +2,7 @@ package sid
 
 import (
 	"fmt"
+	"math"
 	"os"
 	"sync"
 	"time"
@@ -12,7 +13,8 @@ import (
 type SignalSource interface {
 	Lock()
 	// Gen must be called between lock and unlock
-	Gen(volume, sampleRate float64) float64
+	Gen(sampleRate float64) float64
+	Reset()
 	Unlock()
 }
 
@@ -21,11 +23,13 @@ type Sid struct {
 	// This mutex is only used when changing channel sources and volumes
 	mu         sync.Mutex
 	mainStream *portaudio.Stream
+	movingMax  float64
 }
 
 func New(chs map[string]*Channel) *Sid {
 	return &Sid{
-		channels: chs,
+		channels:  chs,
+		movingMax: 1.0,
 	}
 }
 
@@ -41,41 +45,95 @@ func (s *Sid) SetVolume(chname string, volume float64) {
 	s.mu.Unlock()
 }
 
-func (s *Sid) Pause(chname string, volume float64) {
+func (s *Sid) IsPaused(chname string) bool {
 	s.mu.Lock()
-	s.channels[chname].paused = true
+	defer s.mu.Unlock()
+
+	return s.channels[chname].paused
+}
+
+func (s *Sid) PauseAll() {
+	s.mu.Lock()
+	for _, ch := range s.channels {
+		ch.paused = true
+		ch.fadeDirection = SID_FADE_OUT
+
+	}
 	s.mu.Unlock()
 }
 
-func (s *Sid) Resume(chname string, volume float64) {
+func (s *Sid) Pause(chname string) {
+	s.mu.Lock()
+	s.channels[chname].paused = true
+	s.channels[chname].fadeDirection = SID_FADE_OUT
+	s.mu.Unlock()
+}
+
+func (s *Sid) Resume(chname string) {
 	s.mu.Lock()
 	s.channels[chname].paused = false
+	s.channels[chname].fadeDirection = SID_FADE_IN
 	s.mu.Unlock()
+}
+
+func (s *Sid) Reset(chname string) {
+	s.channels[chname].src.Reset()
+	s.channels[chname].fadeCurrent = 0
 }
 
 func (s *Sid) Start(sampleRate float64) {
 	portaudio.Initialize()
 
 	var err error
+	//var channels []Channel
 	s.mainStream, err = portaudio.OpenDefaultStream(0, 1, sampleRate, 0, func(out []float32) {
 		s.mu.Lock()
+		defer s.mu.Unlock()
+
 		for o := range out {
 			out[o] = 0.0
 
 			for _, ch := range s.channels {
-				if !ch.paused {
-					out[o] += float32(ch.src.Gen(ch.volume, sampleRate))
+				if ch.src != nil {
+					if ch.fadeDirection == SID_FADE_IN && ch.fadeCurrent < ch.fadeSamples {
+						ch.fadeCurrent++
+					} else if ch.fadeDirection == SID_FADE_OUT && ch.fadeCurrent > 0 {
+						ch.fadeCurrent--
+					} else if ch.paused {
+						continue
+					}
+
+					// Internally locked
+					out[o] += float32(ch.src.Gen(sampleRate)) * (float32(ch.fadeCurrent) / float32(ch.fadeSamples)) * float32(ch.volume)
 				}
 			}
 
+			max := math.Abs(float64(out[o]))
+			if max > 1.0 {
+				s.movingMax = max
+				fmt.Printf("movingMax=%f (clip)\n", s.movingMax)
+			} else {
+				s.movingMax -= s.movingMax / 256.0
+				s.movingMax += max / 256.0
+			}
+
+			if s.movingMax > 1.0 {
+				out[o] /= float32(s.movingMax)
+			}
+
 			if out[o] > 1.0 {
+				if o == 0 {
+					fmt.Printf("clipping\n")
+				}
 				out[o] = 1.0
 			}
 			if out[o] < -1.0 {
+				if o == 0 {
+					fmt.Printf("clipping\n")
+				}
 				out[o] = -1.0
 			}
 		}
-		s.mu.Unlock()
 	})
 	if err != nil {
 		fmt.Printf("Error opening default stream: %s\n", err)

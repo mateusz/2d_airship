@@ -12,11 +12,21 @@ type Sine struct {
 	mu       sync.Mutex
 }
 
-func (s *Sine) Gen(volume, sampleRate float64) float64 {
+func (s *Sine) Reset() {
+	s.Lock()
+	defer s.Unlock()
+
+	s.phase = 0.0
+}
+
+func (s *Sine) Gen(sampleRate float64) float64 {
+	s.Lock()
+	defer s.Unlock()
+
 	samp := 0.0
 	for ali := 1; ali <= 1<<(s.Aliquots-1); ali *= 2 {
 		// Divide by 2.0, to match amplitude with volume (sine goes into negative)
-		samp += math.Sin(2*math.Pi*(s.phase/float64(ali))) * (volume / 2.0 / float64(s.Aliquots))
+		samp += math.Sin(2*math.Pi*(s.phase/float64(ali))) * (1.0 / 2.0 / float64(s.Aliquots))
 		_, s.phase = math.Modf(s.phase + s.Freq/sampleRate)
 	}
 

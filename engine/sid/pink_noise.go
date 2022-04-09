@@ -18,9 +18,13 @@ func NewPinkNoise(granularity int) *PinkNoise {
 	}
 }
 
-func (s *PinkNoise) Gen(volume, sampleRate float64) float64 {
+func (s *PinkNoise) Reset() {
+
+}
+
+func (s *PinkNoise) Gen(sampleRate float64) float64 {
 	// Add 1 to account for the extra always-on sample
-	subSampleVol := volume / float64(s.granularity+1)
+	subSampleVol := 1.0 / float64(s.granularity+1)
 
 	lastKey := s.key
 	s.key++

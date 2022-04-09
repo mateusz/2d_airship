@@ -23,11 +23,21 @@ func (s *Vibrato) SetFreq(f float64) {
 	s.Unlock()
 }
 
-func (s *Vibrato) Gen(volume, sampleRate float64) float64 {
+func (s *Vibrato) Reset() {
+	s.Lock()
+	defer s.Unlock()
+
+	s.osc1.Reset()
+	s.osc2.Reset()
+	s.osc3.Reset()
+}
+
+func (s *Vibrato) Gen(sampleRate float64) float64 {
 	sound := 0.0
-	sound += s.osc1.Gen(0.45*volume, sampleRate)
-	sound += s.osc2.Gen(0.3*volume, sampleRate)
-	sound += s.osc3.Gen(0.25*volume, sampleRate)
+	// Oscillators locked internally
+	sound += 0.45 * s.osc1.Gen(sampleRate)
+	sound += 0.3 * s.osc2.Gen(sampleRate)
+	sound += 0.25 * s.osc3.Gen(sampleRate)
 	return sound
 }
 

@@ -10,11 +10,14 @@ import (
 )
 
 type Mp3 struct {
-	decoder *mp3.Decoder
-	loop    bool
-	ended   bool
-	buf     []byte
-	mu      sync.Mutex
+	decoder       *mp3.Decoder
+	loop          bool
+	ended         bool
+	buf           []byte
+	sampleCount   int64
+	currentSample int64
+
+	mu sync.Mutex
 }
 
 func NewMp3(path string, loop bool) *Mp3 {
@@ -37,16 +40,27 @@ func NewMp3(path string, loop bool) *Mp3 {
 		os.Exit(2)
 	}
 
+	m.sampleCount = m.decoder.Length() / 4
+
 	return &m
 }
 
 func (s *Mp3) Reset() {
 	s.Lock()
+	defer s.Unlock()
+
 	s.decoder.Seek(0, io.SeekStart)
-	s.Unlock()
+	s.currentSample = 0
 }
 
-func (s *Mp3) Gen(volume, sampleRate float64) float64 {
+func (s *Mp3) Gen(sampleRate float64) float64 {
+	s.Lock()
+	defer s.Unlock()
+
+	return s.innerGen(sampleRate)
+}
+
+func (s *Mp3) innerGen(sampleRate float64) float64 {
 	if s.ended {
 		return 0.0
 	}
@@ -63,12 +77,24 @@ func (s *Mp3) Gen(volume, sampleRate float64) float64 {
 
 		// Average out the channels - we are running mono here!
 		avg := float64(ch1+ch2) / 2.0
+
+		fade := 1.0
+		if !s.loop {
+			samplesLeft := s.sampleCount - s.currentSample
+			if float64(samplesLeft) < (sampleRate / 100.0) {
+				fade = float64(samplesLeft) / (sampleRate / 100.0)
+			}
+		}
+
+		s.currentSample++
+
 		// Rescale from 0..65535 to -1.0..1.0
-		return ((avg/65536.0)*2.0 - 1.0) * volume
+		return ((avg/65536.0)*2.0 - 1.0) * fade
 	} else if err == io.EOF {
 		if s.loop {
 			s.decoder.Seek(0, io.SeekStart)
-			return s.Gen(volume, sampleRate)
+			s.currentSample = 0
+			return s.innerGen(sampleRate)
 		} else {
 			s.ended = true
 		}

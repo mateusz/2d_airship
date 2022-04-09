@@ -12,11 +12,6 @@ const (
 	SPR_16_ENGINE          = 0
 	SPR_16_EXPLOSION_START = 1
 	SPR_16_EXPLOSION_END   = 7
-
-	MP3_EXPLOSION          = 0
-	MP3_SUBMARINE_BREAKING = 1
-	MP3_GROUND_ALERT       = 2
-	MP3_STRESS_ALERT       = 3
 )
 
 var (

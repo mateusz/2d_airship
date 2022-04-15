@@ -9,6 +9,7 @@ require (
 	github.com/hajimehoshi/go-mp3 v0.3.0
 	github.com/lafriks/go-tiled v0.5.0
 	github.com/lucasb-eyer/go-colorful v1.2.0
+	github.com/mjibson/go-dsp v0.0.0-20180508042940-11479a337f12
 	github.com/pelletier/go-toml v1.9.4 // indirect
 	gitlab.com/gomidi/midi v1.23.7
 	gitlab.com/gomidi/midicat v0.4.0 // indirect

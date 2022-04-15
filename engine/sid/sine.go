@@ -12,6 +12,20 @@ type Sine struct {
 	mu       sync.Mutex
 }
 
+func NewSine(freq float64, ali int) *Sine {
+	return &Sine{
+		Freq:     freq,
+		Aliquots: ali,
+	}
+
+}
+
+func (s *Sine) SetFreq(f float64) {
+	s.Lock()
+	s.Freq = f
+	s.Unlock()
+}
+
 func (s *Sine) Reset() {
 	s.Lock()
 	defer s.Unlock()

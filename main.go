@@ -42,6 +42,7 @@ var (
 	audio          *sid.Sid
 	engineSound    *sid.Vibrato
 	whoosh         *sid.PinkNoise
+	radio          *Radio
 )
 
 func main() {
@@ -74,11 +75,16 @@ func main() {
 	carryall := NewCarryall(&mobSprites, &mobSprites32)
 	carryall.position = pixel.Vec{X: 768.0, Y: 168.0}
 	carryall.velocity = pixel.Vec{X: 0.0, Y: 0.5}
-
 	gameEntities = gameEntities.Add(&carryall)
+
+	radio = NewRadio()
+	gameEntities = gameEntities.Add(radio)
+
+	gameEntities = gameEntities.Add(NewHarvester())
 
 	p1.position = pixel.Vec{X: 256.0, Y: 256.0}
 	p1.carryall = &carryall
+	p1.radio = radio
 
 	mc, err = newMidiController()
 	defer mc.close()
@@ -108,9 +114,13 @@ func main() {
 	for chName, ch := range p1.carryall.GetChannels() {
 		chmap[chName] = ch
 	}
+	for chName, ch := range p1.radio.GetChannels() {
+		chmap[chName] = ch
+	}
 
 	audio = sid.New(chmap)
 	carryall.SetupChannels(audio)
+	radio.SetupChannels(audio)
 
 	audio.Start(44100.0)
 
@@ -214,9 +224,9 @@ func run() {
 		gameEntities.MidiInput(mc.queue)
 		gameEntities.MidiOutput(mc.writer)
 		gameEntities.Step(dt)
-
-		// Sound
-		p1.carryall.MakeNoise(audio)
+		gameEntities.MakeNoise(audio)
+		radio.SetLocation(p1.carryall.position)
+		radio.SetSources(gameEntities)
 
 		// Paint
 		win.Clear(colornames.Navy)

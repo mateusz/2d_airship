@@ -8,6 +8,7 @@ import (
 type player struct {
 	position pixel.Vec
 	carryall *Carryall
+	radio    *Radio
 }
 
 func (p *player) Update(dt float64) {

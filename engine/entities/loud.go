@@ -5,7 +5,16 @@ import (
 )
 
 type Loud interface {
-	GetChannels()
+	GetChannels() map[string]*sid.Channel
 	SetupChannels(sid *sid.Sid)
 	MakeNoise(sid *sid.Sid)
+}
+
+func (e Entities) MakeNoise(s *sid.Sid) {
+	for _, ent := range e {
+		l, ok := ent.(Loud)
+		if ok {
+			l.MakeNoise(s)
+		}
+	}
 }

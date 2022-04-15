@@ -7,9 +7,9 @@ type Vibrato struct {
 
 func NewVibrato(freq, f2Mul, f3Mul float64) *Vibrato {
 	return &Vibrato{
-		osc1:  &Sine{Freq: freq, Aliquots: 4},
-		osc2:  &Sine{Freq: freq * f2Mul, Aliquots: 4},
-		osc3:  &Sine{Freq: freq * f3Mul, Aliquots: 4},
+		osc1:  NewSine(freq, 4),
+		osc2:  NewSine(freq*f2Mul, 4),
+		osc3:  NewSine(freq*f3Mul, 4),
 		f2Mul: f2Mul,
 		f3Mul: f3Mul,
 	}

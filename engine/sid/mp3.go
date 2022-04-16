@@ -45,12 +45,20 @@ func NewMp3(path string, loop bool) *Mp3 {
 	return &m
 }
 
+func (s *Mp3) HasEnded() bool {
+	s.Lock()
+	defer s.Unlock()
+
+	return s.ended
+}
+
 func (s *Mp3) Reset() {
 	s.Lock()
 	defer s.Unlock()
 
 	s.decoder.Seek(0, io.SeekStart)
 	s.currentSample = 0
+	s.ended = false
 }
 
 func (s *Mp3) Gen(sampleRate float64) float64 {

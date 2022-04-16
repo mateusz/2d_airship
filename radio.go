@@ -18,6 +18,7 @@ type RadioSource interface {
 	GetFreq() float64
 	GetLocation() pixel.Vec
 	GetSignal() sid.SignalSource
+	GetFiller() sid.SignalSource
 }
 
 // Radio sample processing: pitch -15% -> tempo +33% -> phone equalizer (300-3000) -> distortion/leveler (-50 floor, degree 5) -> aplify to -6
@@ -82,6 +83,9 @@ func (s *Radio) MakeNoise(onto *sid.Sid) {
 	windowSize := 10.0 //kHz, encode 300 as 0.0, 3000.0 as 4.0
 	totalAttenuationDist := 1000.0
 	compoundStrength := 0.0
+	maxStrength := 0.0
+	var signal sid.SignalSource
+	var filler sid.SignalSource
 
 	for _, rs := range s.sources {
 		dist := s.location.Sub(rs.GetLocation()).Len()
@@ -100,12 +104,24 @@ func (s *Radio) MakeNoise(onto *sid.Sid) {
 			distFade = 0.0
 		}
 
-		onto.SetSource(SID_CHAN_RADIO, rs.GetSignal())
 		compoundStrength = signalStrength * math.Sqrt(distFade)
+		if compoundStrength < maxStrength {
+			continue
+		} else {
+			maxStrength = compoundStrength
+		}
+		signal = rs.GetSignal()
+		filler = rs.GetFiller()
 	}
 
+	if signal != nil {
+		onto.SetSource(SID_CHAN_RADIO, signal)
+	} else {
+		onto.SetSource(SID_CHAN_RADIO, filler)
+		compoundStrength /= 2.0
+	}
 	if compoundStrength >= s.squelch {
-		onto.SetVolume(SID_CHAN_RADIO, compoundStrength*0.3*s.vol)
+		onto.SetVolume(SID_CHAN_RADIO, compoundStrength*1.0*s.vol)
 		onto.SetVolume(SID_CHAN_RADIO_NOISE, (1.0-compoundStrength)*0.025*s.vol)
 	} else {
 		onto.SetVolume(SID_CHAN_RADIO, 0.0)

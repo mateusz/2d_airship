@@ -13,25 +13,32 @@ import (
 
 const SID_CHAN_RADIO = "radio"
 const SID_CHAN_RADIO_NOISE = "radioNoise"
+const TRANSMIT_CUT_THE_ENGINES = "cutTheEngines"
+const TRANSMIT_COMING_IN = "comingIn"
+const TRANSMIT_GET_READY = "getReady"
+const TRANSMIT_BLOW_THE_SPICE = "blowTheSpice"
 
 type RadioSource interface {
 	GetFreq() float64
 	GetLocation() pixel.Vec
 	GetSignal() sid.SignalSource
 	GetFiller() sid.SignalSource
+	Transmit(string)
 }
 
 // Radio sample processing: pitch -15% -> tempo +33% -> phone equalizer (300-3000) -> distortion/leveler (-50 floor, degree 5) -> aplify to -6
 type Radio struct {
-	location   pixel.Vec
-	minFreq    float64
-	maxFreq    float64
-	coarseFreq float64
-	fineFreq   float64
-	squelch    float64
-	freq       float64
-	vol        float64
-	sources    []RadioSource
+	location         pixel.Vec
+	minFreq          float64
+	maxFreq          float64
+	coarseFreq       float64
+	fineFreq         float64
+	squelch          float64
+	freq             float64
+	vol              float64
+	sources          []RadioSource
+	transmitCurrent  string
+	transmitSnippets map[string]*sid.Mp3
 
 	sine *sid.Sine
 }
@@ -42,6 +49,12 @@ func NewRadio() *Radio {
 		maxFreq: 3600.0,
 		sources: make([]RadioSource, 0),
 		freq:    3500.0,
+		transmitSnippets: map[string]*sid.Mp3{
+			TRANSMIT_CUT_THE_ENGINES: sid.NewMp3("assets/carr_snippets/snippet-01.mp3", false),
+			TRANSMIT_COMING_IN:       sid.NewMp3("assets/carr_snippets/snippet-02.mp3", false),
+			TRANSMIT_GET_READY:       sid.NewMp3("assets/carr_snippets/snippet-03.mp3", false),
+			TRANSMIT_BLOW_THE_SPICE:  sid.NewMp3("assets/carr_snippets/snippet-04.mp3", false),
+		},
 	}
 	return r
 }
@@ -84,8 +97,7 @@ func (s *Radio) MakeNoise(onto *sid.Sid) {
 	totalAttenuationDist := 1000.0
 	compoundStrength := 0.0
 	maxStrength := 0.0
-	var signal sid.SignalSource
-	var filler sid.SignalSource
+	var radioSource RadioSource
 
 	for _, rs := range s.sources {
 		dist := s.location.Sub(rs.GetLocation()).Len()
@@ -110,19 +122,35 @@ func (s *Radio) MakeNoise(onto *sid.Sid) {
 		} else {
 			maxStrength = compoundStrength
 		}
-		signal = rs.GetSignal()
-		filler = rs.GetFiller()
+
+		radioSource = rs
 	}
 
-	if signal != nil {
-		onto.SetSource(SID_CHAN_RADIO, signal)
-	} else {
-		onto.SetSource(SID_CHAN_RADIO, filler)
-		compoundStrength /= 2.0
+	if s.transmitCurrent != "" {
+		onto.SetSource(SID_CHAN_RADIO, s.transmitSnippets[s.transmitCurrent])
+		onto.SetVolume(SID_CHAN_RADIO, 0.5*s.vol)
+		onto.SetVolume(SID_CHAN_RADIO_NOISE, 0.0)
+		if s.transmitSnippets[s.transmitCurrent].HasEnded() {
+			if compoundStrength > 0.3 && radioSource != nil {
+				radioSource.Transmit(s.transmitCurrent)
+			}
+			s.transmitCurrent = ""
+		}
+		return
 	}
+
+	if radioSource != nil {
+		if radioSource.GetSignal() != nil {
+			onto.SetSource(SID_CHAN_RADIO, radioSource.GetSignal())
+		} else {
+			onto.SetSource(SID_CHAN_RADIO, radioSource.GetFiller())
+			compoundStrength /= 2.0
+		}
+	}
+
 	if compoundStrength >= s.squelch {
-		onto.SetVolume(SID_CHAN_RADIO, compoundStrength*1.0*s.vol)
-		onto.SetVolume(SID_CHAN_RADIO_NOISE, (1.0-compoundStrength)*0.025*s.vol)
+		onto.SetVolume(SID_CHAN_RADIO, compoundStrength*0.5*s.vol)
+		onto.SetVolume(SID_CHAN_RADIO_NOISE, (1.0-compoundStrength)*0.01*s.vol)
 	} else {
 		onto.SetVolume(SID_CHAN_RADIO, 0.0)
 		onto.SetVolume(SID_CHAN_RADIO_NOISE, 0.0)
@@ -135,6 +163,28 @@ func (s *Radio) Input(inputSource *pixelgl.Window, referenceFrame pixel.Matrix) 
 
 func (s *Radio) MidiInput(msgs []midi.Message) {
 	for _, m := range msgs {
+		noff, ok := m.(channel.NoteOff)
+		if ok {
+			if s.transmitCurrent == "" {
+				if noff.Channel() == engine.MIDI_CHAN_HOT_CUE_LEFT && noff.Key() == engine.MIDI_KEY_BANK_1 {
+					s.transmitCurrent = TRANSMIT_COMING_IN
+					s.transmitSnippets[s.transmitCurrent].Reset()
+				}
+				if noff.Channel() == engine.MIDI_CHAN_HOT_CUE_LEFT && noff.Key() == engine.MIDI_KEY_BANK_2 {
+					s.transmitCurrent = TRANSMIT_BLOW_THE_SPICE
+					s.transmitSnippets[s.transmitCurrent].Reset()
+				}
+				if noff.Channel() == engine.MIDI_CHAN_HOT_CUE_LEFT && noff.Key() == engine.MIDI_KEY_BANK_4 {
+					s.transmitCurrent = TRANSMIT_CUT_THE_ENGINES
+					s.transmitSnippets[s.transmitCurrent].Reset()
+				}
+				if noff.Channel() == engine.MIDI_CHAN_HOT_CUE_LEFT && noff.Key() == engine.MIDI_KEY_BANK_3 {
+					s.transmitCurrent = TRANSMIT_GET_READY
+					s.transmitSnippets[s.transmitCurrent].Reset()
+				}
+			}
+		}
+
 		cc, ok := m.(channel.ControlChange)
 		if ok {
 			if cc.Channel() == engine.MIDI_CHAN_MIDDLE && (cc.Controller() == engine.MIDI_CTRL_MSB) {

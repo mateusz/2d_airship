@@ -13,35 +13,59 @@ const (
 	HRV_RADIO_STATE_PRE      = "pre"
 	HRV_RADIO_STATE_SNIPPET  = "snippet"
 	HRV_RADIO_STATE_POST     = "post"
+
+	RESPONSE_ENGINES_CUT           = "enginesCut"
+	RESPONSE_AWAITING_INSTRUCTIONS = "awaitingInstructions"
+	RESPONSE_BLOWING_OFF           = "blowingOff"
+	RESPONSE_READY_TO_GO           = "readyToGo"
 )
 
 type Harvester struct {
-	radioState       string
-	radioSnippets    []*sid.Mp3
-	shuffledSnippets []*sid.Mp3
-	radioFiller      *sid.Mp3
-	currentSnippet   int
-	noise            sid.SignalSource
-	intervalLength   time.Duration
-	prePostLength    time.Duration
-	sectionStart     time.Time
+	radioState            string
+	radioSnippets         []*sid.Mp3
+	shuffledSnippets      []*sid.Mp3
+	radioFiller           *sid.Mp3
+	currentSnippet        int
+	noise                 sid.SignalSource
+	defaultIntervalLength time.Duration
+	intervalLength        time.Duration
+	prePostLength         time.Duration
+	sectionStart          time.Time
+	responseMap           map[string]string
+	responseCurrent       string
+	responseSnippets      map[string]*sid.Mp3
 }
 
 func NewHarvester() *Harvester {
 	h := &Harvester{
-		radioState:     HRV_RADIO_STATE_INTERVAL,
-		intervalLength: time.Second * 5.0,
-		prePostLength:  time.Millisecond * 200.0,
-		sectionStart:   time.Now(),
-		radioFiller:    sid.NewMp3("assets/modem.mp3", true),
+		radioState:            HRV_RADIO_STATE_INTERVAL,
+		defaultIntervalLength: time.Second * 5.0,
+		intervalLength:        time.Second * 5.0,
+		prePostLength:         time.Millisecond * 200.0,
+		sectionStart:          time.Now(),
+		radioFiller:           sid.NewMp3("assets/modem.mp3", true),
 		radioSnippets: []*sid.Mp3{
-			sid.NewMp3("assets/no_wormsigns.mp3", false),
-			sid.NewMp3("assets/spotter_wing_in_range.mp3", false),
-			sid.NewMp3("assets/seismic_activity.mp3", false),
-			sid.NewMp3("assets/all_systems_nominal.mp3", false),
-			sid.NewMp3("assets/harvesting_spice.mp3", false),
+			sid.NewMp3("assets/hrv_snippets/snippet-01.mp3", false),
+			sid.NewMp3("assets/hrv_snippets/snippet-02.mp3", false),
+			sid.NewMp3("assets/hrv_snippets/snippet-03.mp3", false),
+			sid.NewMp3("assets/hrv_snippets/snippet-04.mp3", false),
+			sid.NewMp3("assets/hrv_snippets/snippet-05.mp3", false),
+			sid.NewMp3("assets/hrv_snippets/snippet-06.mp3", false),
+			sid.NewMp3("assets/hrv_snippets/snippet-07.mp3", false),
 		},
 		noise: sid.NewVolumeAdjust(&sid.RandomNoise{}, 0.1),
+		responseMap: map[string]string{
+			"cutTheEngines": RESPONSE_ENGINES_CUT,
+			"comingIn":      RESPONSE_AWAITING_INSTRUCTIONS,
+			"blowTheSpice":  RESPONSE_BLOWING_OFF,
+			"getReady":      RESPONSE_READY_TO_GO,
+		},
+		responseSnippets: map[string]*sid.Mp3{
+			RESPONSE_AWAITING_INSTRUCTIONS: sid.NewMp3("assets/resp_snippets/snippet-01.mp3", false),
+			RESPONSE_BLOWING_OFF:           sid.NewMp3("assets/resp_snippets/snippet-02.mp3", false),
+			RESPONSE_ENGINES_CUT:           sid.NewMp3("assets/resp_snippets/snippet-03.mp3", false),
+			RESPONSE_READY_TO_GO:           sid.NewMp3("assets/resp_snippets/snippet-04.mp3", false),
+		},
 	}
 	h.shuffledSnippets = make([]*sid.Mp3, len(h.radioSnippets))
 	h.ReshuffleRadioSnippets()
@@ -69,16 +93,25 @@ func (s *Harvester) GetFiller() sid.SignalSource {
 
 func (s *Harvester) GetSignal() sid.SignalSource {
 	if s.radioState == HRV_RADIO_STATE_SNIPPET {
-		if s.shuffledSnippets[s.currentSnippet].HasEnded() {
-			s.currentSnippet++
-			if s.currentSnippet >= len(s.radioSnippets) {
-				s.ReshuffleRadioSnippets()
-				s.currentSnippet = 0
+		if s.responseCurrent != "" {
+			if s.responseSnippets[s.responseCurrent].HasEnded() {
+				s.responseCurrent = ""
+				s.sectionStart = time.Now()
+				s.radioState = HRV_RADIO_STATE_POST
 			}
-			s.sectionStart = time.Now()
-			s.radioState = HRV_RADIO_STATE_POST
+			return s.responseSnippets[s.responseCurrent]
+		} else {
+			if s.shuffledSnippets[s.currentSnippet].HasEnded() {
+				s.currentSnippet++
+				if s.currentSnippet >= len(s.radioSnippets) {
+					s.ReshuffleRadioSnippets()
+					s.currentSnippet = 0
+				}
+				s.sectionStart = time.Now()
+				s.radioState = HRV_RADIO_STATE_POST
+			}
+			return s.shuffledSnippets[s.currentSnippet]
 		}
-		return s.shuffledSnippets[s.currentSnippet]
 	} else if s.radioState == HRV_RADIO_STATE_POST {
 		if time.Since(s.sectionStart) > s.prePostLength {
 			s.sectionStart = time.Now()
@@ -87,6 +120,7 @@ func (s *Harvester) GetSignal() sid.SignalSource {
 		return s.noise
 	} else if s.radioState == HRV_RADIO_STATE_INTERVAL {
 		if time.Since(s.sectionStart) > s.intervalLength {
+			s.intervalLength = s.defaultIntervalLength
 			s.sectionStart = time.Now()
 			s.radioState = HRV_RADIO_STATE_PRE
 		}
@@ -95,10 +129,22 @@ func (s *Harvester) GetSignal() sid.SignalSource {
 		if time.Since(s.sectionStart) > s.prePostLength {
 			s.sectionStart = time.Now()
 			s.radioState = HRV_RADIO_STATE_SNIPPET
-			s.shuffledSnippets[s.currentSnippet].Reset()
+			if s.responseCurrent == "" {
+				s.shuffledSnippets[s.currentSnippet].Reset()
+			}
 		}
 		return s.noise
 	}
 
 	return nil
+}
+
+func (s *Harvester) Transmit(msg string) {
+	s.intervalLength = time.Second * 10.0
+	if s.radioState == HRV_RADIO_STATE_INTERVAL {
+		s.responseCurrent = s.responseMap[msg]
+		s.responseSnippets[s.responseCurrent].Reset()
+		s.sectionStart = time.Now()
+		s.radioState = HRV_RADIO_STATE_PRE
+	}
 }

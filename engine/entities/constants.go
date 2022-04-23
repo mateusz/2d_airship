@@ -1,11 +1,12 @@
 package engine
 
 const (
-	MIDI_CHAN_MIDDLE = 0
-	MIDI_CHAN_LEFT   = 1
-	MIDI_CHAN_RIGHT  = 2
-	MIDI_CTRL_RIM    = 9
-	MIDI_CTRL_PAN    = 10
+	MIDI_CHAN_MIDDLE       = 0
+	MIDI_CHAN_LEFT         = 1
+	MIDI_CHAN_RIGHT        = 2
+	MIDI_CHAN_HOT_CUE_LEFT = 6
+	MIDI_CTRL_RIM          = 9
+	MIDI_CTRL_PAN          = 10
 
 	MIDI_VAL_PAN_CCW = 127
 	MIDI_VAL_PAN_CW  = 1
@@ -22,4 +23,9 @@ const (
 	MIDI_KEY_SYNC     = 5
 	MIDI_KEY_PLAY     = 7
 	MIDI_KEY_LED_SHOW = 36
+
+	MIDI_KEY_BANK_1 = 0
+	MIDI_KEY_BANK_2 = 1
+	MIDI_KEY_BANK_3 = 2
+	MIDI_KEY_BANK_4 = 3
 )

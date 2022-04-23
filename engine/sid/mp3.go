@@ -89,8 +89,10 @@ func (s *Mp3) innerGen(sampleRate float64) float64 {
 		fade := 1.0
 		if !s.loop {
 			samplesLeft := s.sampleCount - s.currentSample
-			if float64(samplesLeft) < (sampleRate / 100.0) {
-				fade = float64(samplesLeft) / (sampleRate / 100.0)
+			if float64(s.currentSample) < (sampleRate / 10.0) {
+				fade = float64(s.currentSample) / (sampleRate / 10.0)
+			} else if float64(samplesLeft) < (sampleRate / 10.0) {
+				fade = float64(samplesLeft) / (sampleRate / 10.0)
 			}
 		}
 

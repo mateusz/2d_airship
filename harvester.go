@@ -140,7 +140,7 @@ func (s *Harvester) GetSignal() sid.SignalSource {
 }
 
 func (s *Harvester) Transmit(msg string) {
-	s.intervalLength = time.Second * 10.0
+	s.intervalLength = time.Second * 20.0
 	if s.radioState == HRV_RADIO_STATE_INTERVAL {
 		s.responseCurrent = s.responseMap[msg]
 		s.responseSnippets[s.responseCurrent].Reset()

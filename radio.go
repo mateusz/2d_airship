@@ -174,11 +174,11 @@ func (s *Radio) MidiInput(msgs []midi.Message) {
 					s.transmitCurrent = TRANSMIT_BLOW_THE_SPICE
 					s.transmitSnippets[s.transmitCurrent].Reset()
 				}
-				if noff.Channel() == engine.MIDI_CHAN_HOT_CUE_LEFT && noff.Key() == engine.MIDI_KEY_BANK_4 {
+				if noff.Channel() == engine.MIDI_CHAN_HOT_CUE_LEFT && noff.Key() == engine.MIDI_KEY_BANK_3 {
 					s.transmitCurrent = TRANSMIT_CUT_THE_ENGINES
 					s.transmitSnippets[s.transmitCurrent].Reset()
 				}
-				if noff.Channel() == engine.MIDI_CHAN_HOT_CUE_LEFT && noff.Key() == engine.MIDI_KEY_BANK_3 {
+				if noff.Channel() == engine.MIDI_CHAN_HOT_CUE_LEFT && noff.Key() == engine.MIDI_KEY_BANK_4 {
 					s.transmitCurrent = TRANSMIT_GET_READY
 					s.transmitSnippets[s.transmitCurrent].Reset()
 				}

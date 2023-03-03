@@ -1,4 +1,6 @@
-## Installation
+# 2D airship simulator
+
+Operated with a DJ MIDI device.
 
 Gameplay: [https://www.youtube.com/watch?v=LzHqutkuW90](https://www.youtube.com/watch?v=LzHqutkuW90)
 
